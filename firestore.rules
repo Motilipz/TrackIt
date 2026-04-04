@@ -1,0 +1,84 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: /users/{userId}/logs/{logId}
+    // Document ID: auto-generated or logId
+    // Fields:
+    //   - userId: string (required, matches userId in path)
+    //   - category: string (required)
+    //   - duration: number (required, positive)
+    //   - date: timestamp (required)
+    //   - notes: string (optional)
+    //   - createdAt: timestamp (required)
+    //
+    // Collection: /users/{userId}/settings/{settingId}
+    // Document ID: categories or goals
+    // Fields:
+    //   - list: list of strings (required for categories)
+    //   - daily: number (required for goals)
+    //   - weekly: number (required for goals)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isValidLog(data) {
+      return data.keys().hasAll(['userId', 'category', 'duration', 'date', 'createdAt']) &&
+             data.userId is string &&
+             data.category is string && data.category.size() > 0 && data.category.size() < 100 &&
+             data.duration is number && data.duration > 0 &&
+             data.date is timestamp &&
+             data.createdAt is timestamp &&
+             (!('notes' in data) || (data.notes is string && data.notes.size() <= 1000)) &&
+             (!('startTime' in data) || (data.startTime is string)) &&
+             (!('endTime' in data) || (data.endTime is string)) &&
+             (!('updatedAt' in data) || (data.updatedAt is timestamp));
+    }
+
+    function isValidSettings(data, settingId) {
+      return (settingId == 'categories' && data.keys().hasAll(['list']) && data.list is list && data.list.size() <= 50) ||
+             (settingId == 'goals' && data.keys().hasAll(['daily', 'weekly']) && data.daily is number && data.weekly is number);
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    // Deny all by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // User data structure
+    match /users/{userId} {
+      // Allow user to read their own document (even if empty)
+      allow read: if isOwner(userId);
+      
+      // User logs
+      match /logs/{logId} {
+        allow read, delete: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidLog(request.resource.data);
+      }
+
+      // User settings
+      match /settings/{settingId} {
+        allow read: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidSettings(request.resource.data, settingId);
+        allow delete: if isOwner(userId);
+      }
+    }
+  }
+}

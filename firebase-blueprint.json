@@ -1,0 +1,46 @@
+{
+  "entities": {
+    "StudyLog": {
+      "title": "StudyLog",
+      "description": "A single entry of study time for CAT preparation.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier for the log entry." },
+        "userId": { "type": "string", "description": "The UID of the user who logged the time." },
+        "category": { "type": "string", "description": "The category of study." },
+        "duration": { "type": "number", "description": "Duration in minutes." },
+        "date": { "type": "string", "format": "date-time", "description": "The date of the study session." },
+        "notes": { "type": "string", "description": "Optional notes for the session." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the log was created." },
+        "startTime": { "type": "string", "description": "Start time in HH:MM format." },
+        "endTime": { "type": "string", "description": "End time in HH:MM format." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "When the log was last updated." }
+      },
+      "required": ["userId", "category", "duration", "date", "createdAt"]
+    },
+    "UserSettings": {
+      "title": "UserSettings",
+      "description": "User-specific settings like custom categories or goals.",
+      "type": "object",
+      "properties": {
+        "list": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "List of custom study categories."
+        },
+        "daily": { "type": "number", "description": "Daily study goal in minutes." },
+        "weekly": { "type": "number", "description": "Weekly study goal in minutes." }
+      }
+    }
+  },
+  "firestore": {
+    "/users/{userId}/logs/{logId}": {
+      "schema": "StudyLog",
+      "description": "User's study logs."
+    },
+    "/users/{userId}/settings/{settingId}": {
+      "schema": "UserSettings",
+      "description": "User's settings and configurations."
+    }
+  }
+}
