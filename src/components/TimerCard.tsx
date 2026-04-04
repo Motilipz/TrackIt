@@ -24,7 +24,7 @@ const AMBIENT_SOUNDS = [
   { id: 'cafe', name: 'Coffee Shop', icon: Music, url: 'https://actions.google.com/sounds/v1/ambiences/coffee_shop.ogg' },
   { id: 'rain', name: 'Rain', icon: CloudRain, url: 'https://actions.google.com/sounds/v1/ambiences/rain_on_roof.ogg' },
   { id: 'forest', name: 'Forest', icon: Trees, url: 'https://actions.google.com/sounds/v1/ambiences/forest_ambience.ogg' },
-  { id: 'waves', name: 'Ocean', icon: Waves, url: 'https://actions.google.com/sounds/v1/ambiences/ocean_waves.ogg' },
+  { id: 'ordinary', name: 'Ordinary', icon: Music, url: 'https://www.mobiles24.co/downloads/d/Fdho6UN9zG' },
   { id: 'custom', name: 'Custom URL', icon: Link },
 ];
 

@@ -43,8 +43,9 @@ service cloud.firestore {
              data.date is timestamp &&
              data.createdAt is timestamp &&
              (!('notes' in data) || (data.notes is string && data.notes.size() <= 1000)) &&
-             (!('startTime' in data) || (data.startTime is string)) &&
-             (!('endTime' in data) || (data.endTime is string)) &&
+             (!('startTime' in data) || (data.startTime is string || data.startTime == null)) &&
+             (!('endTime' in data) || (data.endTime is string || data.endTime == null)) &&
+             (!('rating' in data) || (data.rating is number && data.rating >= 0 && data.rating <= 5)) &&
              (!('updatedAt' in data) || (data.updatedAt is timestamp));
     }
 

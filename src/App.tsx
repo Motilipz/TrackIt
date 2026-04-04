@@ -594,13 +594,13 @@ function AppContent() {
           
           batch.set(logRef, {
             userId: user.uid,
-            category: log.category,
-            duration: log.duration,
+            category: String(log.category),
+            duration: Number(log.duration),
             date: Timestamp.fromDate(logDate),
-            notes: log.notes || '',
-            rating: log.rating || 3,
-            startTime: log.startTime || null,
-            endTime: log.endTime || null,
+            notes: String(log.notes || ''),
+            rating: Number(log.rating || 3),
+            startTime: log.startTime ? String(log.startTime) : null,
+            endTime: log.endTime ? String(log.endTime) : null,
             createdAt: Timestamp.now(),
             updatedAt: Timestamp.now()
           });
