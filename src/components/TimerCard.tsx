@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useTimer } from '../hooks/useTimer';
 import { Session, TimerSettings, StudyLog } from '../types';
 import { format, isSameDay, isWithinInterval, subDays } from 'date-fns';
+import { auth, db, collection, addDoc, Timestamp, doc, setDoc } from '../firebase';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -203,7 +204,13 @@ export const TimerCard = ({ logs = [] }: { logs?: StudyLog[] }) => {
     }
   };
 
-  const submitSession = () => {
+  const submitSession = async () => {
+    const user = auth.currentUser;
+    if (!user) {
+      console.error('User not authenticated. Session not saved.');
+      return;
+    }
+
     const session: Session = {
       id: crypto.randomUUID(),
       timestamp: Date.now(),
@@ -217,8 +224,23 @@ export const TimerCard = ({ logs = [] }: { logs?: StudyLog[] }) => {
       strategicTag
     };
     
-    // In a real app, save to DB/Localstorage
-    console.log('Session Saved:', session);
+    try {
+      // Save to Firestore
+      await addDoc(collection(db, 'users', user.uid, 'logs'), {
+        userId: user.uid,
+        category,
+        duration: Math.floor(timer.elapsedTime / 60) || 1, // Store in minutes, min 1m
+        date: Timestamp.now(),
+        notes: `${notes}${takeaways ? '\nTakeaways: ' + takeaways : ''}${sillyMistakes ? '\nSilly Mistakes: ' + sillyMistakes : ''}${strategicTag ? '\nStrategy: ' + strategicTag : ''}`,
+        rating,
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now(),
+        timerSessionId: session.id
+      });
+      console.log('Session Saved to Firestore:', session);
+    } catch (error) {
+      console.error('Error saving session to Firestore:', error);
+    }
     
     timer.completeSession(rating, notes, category, takeaways, sillyMistakes, strategicTag);
     setShowRatingModal(false);
@@ -307,109 +329,6 @@ export const TimerCard = ({ logs = [] }: { logs?: StudyLog[] }) => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 w-full max-w-6xl">
         {/* Left Sidebar - Stats Placeholder */}
         <div className="lg:col-span-1 space-y-6">
-          <div className="bg-white dark:bg-zinc-900/50 border border-slate-200 dark:border-zinc-800 rounded-2xl p-6">
-            <h3 className="text-sm font-medium text-slate-400 dark:text-zinc-400 mb-4 uppercase tracking-wider">Analytics</h3>
-            <div className="space-y-4">
-              <div className="flex justify-between items-end">
-                <span className="text-slate-500 dark:text-zinc-500 text-sm">Daily Streak</span>
-                <span className="text-2xl font-bold text-orange-500">12 Days</span>
-              </div>
-              <div className="h-2 bg-slate-100 dark:bg-zinc-800 rounded-full overflow-hidden">
-                <motion.div 
-                  initial={{ width: 0 }}
-                  animate={{ width: '75%' }}
-                  className="h-full bg-orange-500"
-                />
-              </div>
-              
-              <div className="pt-4 space-y-3">
-                <div className="flex justify-between text-sm">
-                  <span className="text-slate-400 dark:text-zinc-400">QA Progress</span>
-                  <span className="dark:text-white">14/20 hrs</span>
-                </div>
-                <div className="h-1.5 bg-slate-100 dark:bg-zinc-800 rounded-full overflow-hidden">
-                  <div className="h-full bg-blue-500 w-[70%]" />
-                </div>
-                
-                <div className="flex justify-between text-sm">
-                  <span className="text-slate-400 dark:text-zinc-400">DILR Progress</span>
-                  <span className="dark:text-white">8/15 hrs</span>
-                </div>
-                <div className="h-1.5 bg-slate-100 dark:bg-zinc-800 rounded-full overflow-hidden">
-                  <div className="h-full bg-purple-500 w-[53%]" />
-                </div>
-
-                <div className="flex justify-between text-sm">
-                  <span className="text-slate-400 dark:text-zinc-400">VARC Progress</span>
-                  <span className="dark:text-white">11/18 hrs</span>
-                </div>
-                <div className="h-1.5 bg-slate-100 dark:bg-zinc-800 rounded-full overflow-hidden">
-                  <div className="h-full bg-emerald-500 w-[61%]" />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white dark:bg-zinc-900/50 border border-slate-200 dark:border-zinc-800 rounded-2xl p-6">
-            <h3 className="text-sm font-medium text-slate-400 dark:text-zinc-400 mb-4 uppercase tracking-wider">Advanced Analytics</h3>
-            <div className="space-y-4">
-              <div>
-                <div className="flex justify-between text-[10px] uppercase font-bold text-slate-400 mb-1">
-                  <span>Burnout Risk</span>
-                  {(() => {
-                    const todayLogs = logs.filter(l => isSameDay(l.date, new Date()));
-                    const todayHours = todayLogs.reduce((acc, curr) => acc + curr.duration, 0) / 60;
-                    const risk = todayHours > 8 ? "Critical" : todayHours > 5 ? "Moderate" : "Low";
-                    const color = todayHours > 8 ? "text-red-500" : todayHours > 5 ? "text-orange-500" : "text-emerald-500";
-                    const bgColor = todayHours > 8 ? "bg-red-500" : todayHours > 5 ? "bg-orange-500" : "bg-emerald-500";
-                    
-                    return (
-                      <>
-                        <span className={color}>{risk}</span>
-                        <div className="h-1.5 bg-slate-100 dark:bg-zinc-800 rounded-full overflow-hidden mt-1">
-                          <motion.div 
-                            initial={{ width: 0 }}
-                            animate={{ width: `${Math.min((todayHours / 10) * 100, 100)}%` }}
-                            className={cn("h-full transition-colors", bgColor)}
-                          />
-                        </div>
-                      </>
-                    );
-                  })()}
-                </div>
-              </div>
-
-              <div className="pt-2">
-                <span className="text-[10px] uppercase font-bold text-slate-400 mb-2 block">Focus Heatmap (Today)</span>
-                <div className="grid grid-cols-12 gap-1">
-                  {Array.from({ length: 24 }).map((_, i) => {
-                    const hourLogs = logs.filter(l => {
-                      if (!isSameDay(l.date, new Date())) return false;
-                      const logHour = l.startTime ? parseInt(l.startTime.split(':')[0]) : -1;
-                      return logHour === i;
-                    });
-                    const hasActivity = hourLogs.length > 0;
-                    const intensity = hourLogs.reduce((acc, curr) => acc + curr.duration, 0);
-                    
-                    return (
-                      <div 
-                        key={i} 
-                        className={cn(
-                          "h-3 rounded-sm transition-colors",
-                          intensity > 60 ? "bg-indigo-600" :
-                          intensity > 30 ? "bg-indigo-400" :
-                          intensity > 0 ? "bg-indigo-200" :
-                          "bg-slate-100 dark:bg-zinc-800"
-                        )}
-                        title={`${i}:00 - ${intensity} mins`}
-                      />
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          </div>
-
           <div className="bg-white dark:bg-zinc-900/50 border border-slate-200 dark:border-zinc-800 rounded-2xl p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-medium text-slate-400 dark:text-zinc-400 uppercase tracking-wider">Ambient Sounds</h3>
@@ -543,6 +462,28 @@ export const TimerCard = ({ logs = [] }: { logs?: StudyLog[] }) => {
                 </motion.div>
               )}
             </AnimatePresence>
+
+            {/* Mode Selection */}
+            <div className="flex gap-2 mb-8 relative z-10">
+              {[
+                { id: 'focus', label: 'Pomodoro' },
+                { id: 'break', label: 'Short Break' },
+                { id: 'long-break', label: 'Long Break' }
+              ].map((m) => (
+                <button
+                  key={m.id}
+                  onClick={() => timer.changeMode(m.id as any)}
+                  className={cn(
+                    "px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all",
+                    timer.mode === m.id 
+                      ? "bg-indigo-600 text-white shadow-lg shadow-indigo-200 dark:shadow-none" 
+                      : "bg-slate-100 dark:bg-zinc-800 text-slate-500 dark:text-zinc-400 hover:bg-slate-200 dark:hover:bg-zinc-700"
+                  )}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
 
             {/* Status & Mode */}
             <div className="w-full flex justify-between items-center mb-8 relative z-10">

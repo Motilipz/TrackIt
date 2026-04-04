@@ -161,6 +161,21 @@ export const useTimer = (initialSettings: TimerSettings) => {
     resetTimer,
     completeSession,
     setMode,
-    setStatus
+    setStatus,
+    changeMode: (newMode: TimerMode) => {
+      if (timerRef.current) clearInterval(timerRef.current);
+      setMode(newMode);
+      setStatus('idle');
+      setOvertimeSeconds(0);
+      setElapsedTime(0);
+      if (newMode === 'focus') setTimeLeft(settings.focusTime * 60);
+      else if (newMode === 'break') setTimeLeft(settings.breakTime * 60);
+      else if (newMode === 'long-break') setTimeLeft(settings.longBreakTime * 60);
+      else if (newMode === 'mock') setTimeLeft(settings.mockTime * 60);
+      else if (newMode === 'marathon') {
+        setMarathonSection('VARC');
+        setTimeLeft(40 * 60);
+      }
+    }
   };
 };
