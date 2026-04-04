@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Volume2, VolumeX, Play, Pause, RotateCcw, Save, Settings as SettingsIcon, X, Star, AlertTriangle, Maximize2, SkipForward, Shield, Zap, CloudRain, Trees, Waves, Music, Link, Volume1, Download } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useTimer } from '../hooks/useTimer';
-import { Session, TimerSettings } from '../types';
+import { Session, TimerSettings, StudyLog } from '../types';
+import { format, isSameDay, isWithinInterval, subDays } from 'date-fns';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -28,16 +29,26 @@ const AMBIENT_SOUNDS = [
   { id: 'custom', name: 'Custom URL', icon: Link },
 ];
 
-const IRON_MIND_QUOTES = [
-  { text: "He who has a why to live can bear almost any how.", author: "Friedrich Nietzsche" },
-  { text: "The secret of existence is not just to live, but to have something to live for.", author: "Fyodor Dostoevsky" },
-  { text: "Where the willingness is great, the difficulties cannot be great.", author: "Niccolò Machiavelli" },
-  { text: "That which does not kill us makes us stronger.", author: "Friedrich Nietzsche" },
-  { text: "To live is to suffer, to survive is to find some meaning in the suffering.", author: "Friedrich Nietzsche" },
-  { text: "The man of character finds an objective in every difficulty.", author: "Niccolò Machiavelli" },
-  { text: "Pain is inevitable. Suffering is optional.", author: "Haruki Murakami" },
-  { text: "The more we do, the more we can do.", author: "William Hazlitt" }
-];
+const IRON_MIND_QUOTES = {
+  stoicism: [
+    { text: "He who has a why to live can bear almost any how.", author: "Friedrich Nietzsche" },
+    { text: "Very little is needed to make a happy life; it is all within yourself, in your way of thinking.", author: "Marcus Aurelius" },
+    { text: "The impediment to action advances action. What stands in the way becomes the way.", author: "Marcus Aurelius" },
+    { text: "It is not death that a man should fear, but he should fear never beginning to live.", author: "Marcus Aurelius" }
+  ],
+  psychology: [
+    { text: "The secret of existence is not just to live, but to have something to live for.", author: "Fyodor Dostoevsky" },
+    { text: "To live is to suffer, to survive is to find some meaning in the suffering.", author: "Friedrich Nietzsche" },
+    { text: "Pain is inevitable. Suffering is optional.", author: "Haruki Murakami" },
+    { text: "The more we do, the more we can do.", author: "William Hazlitt" }
+  ],
+  strategy: [
+    { text: "Where the willingness is great, the difficulties cannot be great.", author: "Niccolò Machiavelli" },
+    { text: "The man of character finds an objective in every difficulty.", author: "Niccolò Machiavelli" },
+    { text: "That which does not kill us makes us stronger.", author: "Friedrich Nietzsche" },
+    { text: "Victory belongs to the most persevering.", author: "Napoleon Bonaparte" }
+  ]
+};
 
 const STRATEGIC_TAGS = [
   "High-Value Strength",
@@ -45,10 +56,12 @@ const STRATEGIC_TAGS = [
   "Defensive Area",
   "Competitive Edge",
   "Conceptual Gap",
-  "Speed Bottleneck"
+  "Speed Bottleneck",
+  "Accuracy Trap",
+  "Mental Fatigue"
 ];
 
-export const TimerCard = () => {
+export const TimerCard = ({ logs = [] }: { logs?: StudyLog[] }) => {
   const [initialSettings] = useState<TimerSettings>({
     autoFlow: false,
     strictMode: false,
@@ -74,7 +87,7 @@ export const TimerCard = () => {
   // Interactive Session Notes
   const [takeaways, setTakeaways] = useState('');
   const [sillyMistakes, setSillyMistakes] = useState('');
-  const [strategicTag, setStrategicTag] = useState('');
+  const [strategicTag, setStrategicTag] = useState(STRATEGIC_TAGS[0]);
 
   // Audio state
   const [ambientSound, setAmbientSound] = useState<string>('none');
@@ -83,14 +96,16 @@ export const TimerCard = () => {
   const [showCustomInput, setShowCustomInput] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  const [quote, setQuote] = useState(IRON_MIND_QUOTES[0]);
+  const [quoteCategory, setQuoteCategory] = useState<keyof typeof IRON_MIND_QUOTES>('stoicism');
+  const [quote, setQuote] = useState(IRON_MIND_QUOTES.stoicism[0]);
 
   useEffect(() => {
     if (timer.status === 'idle' || timer.mode === 'break' || timer.mode === 'long-break') {
-      const randomQuote = IRON_MIND_QUOTES[Math.floor(Math.random() * IRON_MIND_QUOTES.length)];
+      const currentQuotes = IRON_MIND_QUOTES[quoteCategory];
+      const randomQuote = currentQuotes[Math.floor(Math.random() * currentQuotes.length)];
       setQuote(randomQuote);
     }
-  }, [timer.status, timer.mode]);
+  }, [timer.status, timer.mode, quoteCategory]);
 
   const exportCSV = () => {
     // This would ideally fetch from Firebase, but for now we'll use a placeholder
@@ -211,7 +226,7 @@ export const TimerCard = () => {
     setNotes('');
     setTakeaways('');
     setSillyMistakes('');
-    setStrategicTag('');
+    setStrategicTag(STRATEGIC_TAGS[0]);
   };
 
   const submitAbandon = () => {
@@ -223,43 +238,49 @@ export const TimerCard = () => {
 
   // Picture in Picture Simulation (Condensed UI)
   const togglePiP = async () => {
-    // Real PiP requires a video element. We can draw the timer to a canvas and use that.
-    const canvas = document.createElement('canvas');
-    canvas.width = 300;
-    canvas.height = 150;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const video = document.createElement('video');
-    video.muted = true;
-    video.srcObject = canvas.captureStream();
-    video.play();
-
-    const updateCanvas = () => {
-      ctx.fillStyle = '#09090b';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 48px monospace';
-      ctx.textAlign = 'center';
-      const timeStr = formatTime(timer.status === 'overtime' ? timer.overtimeSeconds : timer.timeLeft);
-      ctx.fillText(timeStr, canvas.width / 2, canvas.height / 2 + 15);
-      
-      ctx.font = '16px sans-serif';
-      ctx.fillText(timer.mode.toUpperCase(), canvas.width / 2, 40);
-      
-      if (video.srcObject) {
-        requestAnimationFrame(updateCanvas);
-      }
-    };
-    
-    updateCanvas();
-
     try {
       if (document.pictureInPictureElement) {
         await document.exitPictureInPicture();
-      } else {
-        await video.requestPictureInPicture();
+        return;
       }
+
+      // Real PiP requires a video element. We can draw the timer to a canvas and use that.
+      const canvas = document.createElement('canvas');
+      canvas.width = 300;
+      canvas.height = 150;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      const video = document.createElement('video');
+      video.muted = true;
+      video.srcObject = canvas.captureStream();
+      
+      // Wait for metadata to load before requesting PiP
+      await new Promise((resolve) => {
+        video.onloadedmetadata = resolve;
+      });
+
+      await video.play();
+
+      const updateCanvas = () => {
+        ctx.fillStyle = '#09090b';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 48px monospace';
+        ctx.textAlign = 'center';
+        const timeStr = formatTime(timer.status === 'overtime' ? timer.overtimeSeconds : timer.timeLeft);
+        ctx.fillText(timeStr, canvas.width / 2, canvas.height / 2 + 15);
+        
+        ctx.font = '16px sans-serif';
+        ctx.fillText(timer.mode.toUpperCase(), canvas.width / 2, 40);
+        
+        if (video.srcObject && document.pictureInPictureElement === video) {
+          requestAnimationFrame(updateCanvas);
+        }
+      };
+      
+      updateCanvas();
+      await video.requestPictureInPicture();
     } catch (err) {
       console.error('PiP failed', err);
     }
@@ -316,6 +337,74 @@ export const TimerCard = () => {
                 </div>
                 <div className="h-1.5 bg-slate-100 dark:bg-zinc-800 rounded-full overflow-hidden">
                   <div className="h-full bg-purple-500 w-[53%]" />
+                </div>
+
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-400 dark:text-zinc-400">VARC Progress</span>
+                  <span className="dark:text-white">11/18 hrs</span>
+                </div>
+                <div className="h-1.5 bg-slate-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+                  <div className="h-full bg-emerald-500 w-[61%]" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-zinc-900/50 border border-slate-200 dark:border-zinc-800 rounded-2xl p-6">
+            <h3 className="text-sm font-medium text-slate-400 dark:text-zinc-400 mb-4 uppercase tracking-wider">Advanced Analytics</h3>
+            <div className="space-y-4">
+              <div>
+                <div className="flex justify-between text-[10px] uppercase font-bold text-slate-400 mb-1">
+                  <span>Burnout Risk</span>
+                  {(() => {
+                    const todayLogs = logs.filter(l => isSameDay(l.date, new Date()));
+                    const todayHours = todayLogs.reduce((acc, curr) => acc + curr.duration, 0) / 60;
+                    const risk = todayHours > 8 ? "Critical" : todayHours > 5 ? "Moderate" : "Low";
+                    const color = todayHours > 8 ? "text-red-500" : todayHours > 5 ? "text-orange-500" : "text-emerald-500";
+                    const bgColor = todayHours > 8 ? "bg-red-500" : todayHours > 5 ? "bg-orange-500" : "bg-emerald-500";
+                    
+                    return (
+                      <>
+                        <span className={color}>{risk}</span>
+                        <div className="h-1.5 bg-slate-100 dark:bg-zinc-800 rounded-full overflow-hidden mt-1">
+                          <motion.div 
+                            initial={{ width: 0 }}
+                            animate={{ width: `${Math.min((todayHours / 10) * 100, 100)}%` }}
+                            className={cn("h-full transition-colors", bgColor)}
+                          />
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+              </div>
+
+              <div className="pt-2">
+                <span className="text-[10px] uppercase font-bold text-slate-400 mb-2 block">Focus Heatmap (Today)</span>
+                <div className="grid grid-cols-12 gap-1">
+                  {Array.from({ length: 24 }).map((_, i) => {
+                    const hourLogs = logs.filter(l => {
+                      if (!isSameDay(l.date, new Date())) return false;
+                      const logHour = l.startTime ? parseInt(l.startTime.split(':')[0]) : -1;
+                      return logHour === i;
+                    });
+                    const hasActivity = hourLogs.length > 0;
+                    const intensity = hourLogs.reduce((acc, curr) => acc + curr.duration, 0);
+                    
+                    return (
+                      <div 
+                        key={i} 
+                        className={cn(
+                          "h-3 rounded-sm transition-colors",
+                          intensity > 60 ? "bg-indigo-600" :
+                          intensity > 30 ? "bg-indigo-400" :
+                          intensity > 0 ? "bg-indigo-200" :
+                          "bg-slate-100 dark:bg-zinc-800"
+                        )}
+                        title={`${i}:00 - ${intensity} mins`}
+                      />
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -427,6 +516,34 @@ export const TimerCard = () => {
               timer.mode === 'long-break' ? "bg-blue-500" : "bg-purple-500"
             )} />
 
+            {/* Simulated Blocker Overlay */}
+            <AnimatePresence>
+              {(timer.settings.strictMode && (timer.status === 'running' || timer.status === 'overtime')) && (
+                <motion.div 
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="absolute inset-0 z-50 bg-zinc-950/90 backdrop-blur-md flex flex-col items-center justify-center p-8 text-center"
+                >
+                  <Shield size={64} className="text-red-500 mb-6 animate-pulse" />
+                  <h2 className="text-3xl font-bold text-white mb-4">FOCUS LOCK ACTIVE</h2>
+                  <p className="text-zinc-400 max-w-md mb-8">
+                    Strict mode is engaged. Distractions are blocked. 
+                    Finish your session to unlock the interface.
+                  </p>
+                  <div className="text-5xl font-mono font-bold text-white mb-8">
+                    {formatTime(timer.status === 'overtime' ? timer.overtimeSeconds : timer.timeLeft)}
+                  </div>
+                  <button 
+                    onClick={timer.toggleTimer}
+                    className="px-8 py-4 bg-red-600 hover:bg-red-500 text-white rounded-2xl font-bold transition-all"
+                  >
+                    EMERGENCY UNLOCK
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
             {/* Status & Mode */}
             <div className="w-full flex justify-between items-center mb-8 relative z-10">
               <div className="flex items-center gap-2">
@@ -449,6 +566,22 @@ export const TimerCard = () => {
                   Session {timer.sessionsCompleted + 1}
                 </div>
               </div>
+            </div>
+
+            {/* Pomodoro Cycle Tracker */}
+            <div className="flex gap-2 mb-4 relative z-10">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div 
+                  key={i}
+                  className={cn(
+                    "w-2 h-2 rounded-full transition-all duration-500",
+                    i < (timer.sessionsCompleted % 4) ? "bg-indigo-500 scale-110" : 
+                    i === (timer.sessionsCompleted % 4) && timer.status === 'running' ? "bg-indigo-400 animate-pulse" :
+                    "bg-slate-200 dark:bg-zinc-800"
+                  )}
+                />
+              ))}
+              <span className="text-[8px] uppercase font-bold text-slate-400 ml-2">Cycle Progress</span>
             </div>
 
             {/* Timer Display with Progress Ring */}
@@ -528,6 +661,20 @@ export const TimerCard = () => {
                 animate={{ opacity: 1, y: 0 }}
                 className="text-center max-w-md mb-8 relative z-10"
               >
+                <div className="flex justify-center gap-4 mb-4">
+                  {(Object.keys(IRON_MIND_QUOTES) as Array<keyof typeof IRON_MIND_QUOTES>).map((cat) => (
+                    <button
+                      key={cat}
+                      onClick={() => setQuoteCategory(cat)}
+                      className={cn(
+                        "text-[10px] uppercase font-bold tracking-widest transition-colors",
+                        quoteCategory === cat ? "text-indigo-600 dark:text-indigo-400" : "text-slate-400 hover:text-slate-600"
+                      )}
+                    >
+                      {cat}
+                    </button>
+                  ))}
+                </div>
                 <p className="text-lg font-serif italic text-slate-700 dark:text-zinc-300 mb-2">"{quote.text}"</p>
                 <p className="text-xs font-bold uppercase tracking-widest text-slate-400 dark:text-zinc-500">— {quote.author}</p>
               </motion.div>
@@ -573,7 +720,7 @@ export const TimerCard = () => {
             </div>
 
             {/* Inputs */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full mb-8 relative z-10">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full mb-8 relative z-10">
               <div className="space-y-1.5">
                 <label className="text-[10px] uppercase font-bold text-slate-400 dark:text-zinc-500 ml-1">Focus Category</label>
                 <input 
@@ -583,6 +730,18 @@ export const TimerCard = () => {
                   placeholder="e.g. QA, DILR"
                   className="w-full bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-indigo-500 dark:focus:border-indigo-500 transition-colors dark:text-white"
                 />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[10px] uppercase font-bold text-slate-400 dark:text-zinc-500 ml-1">Strategy Tag</label>
+                <select 
+                  value={strategicTag}
+                  onChange={(e) => setStrategicTag(e.target.value)}
+                  className="w-full bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-indigo-500 dark:focus:border-indigo-500 transition-colors dark:text-white appearance-none"
+                >
+                  {STRATEGIC_TAGS.map(tag => (
+                    <option key={tag} value={tag}>{tag}</option>
+                  ))}
+                </select>
               </div>
               <div className="space-y-1.5">
                 <label className="text-[10px] uppercase font-bold text-slate-400 dark:text-zinc-500 ml-1">Session Notes</label>

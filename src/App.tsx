@@ -22,6 +22,7 @@ import {
 } from './firebase';
 
 import { TimerCard } from './components/TimerCard';
+import { StudyLog } from './types';
 
 // Theme Types
 type Theme = 'light' | 'dark' | 'system';
@@ -144,16 +145,16 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
   const errInfo: FirestoreErrorInfo = {
     error: error instanceof Error ? error.message : String(error),
     authInfo: {
-      userId: auth.currentUser?.uid,
-      email: auth.currentUser?.email,
-      emailVerified: auth.currentUser?.emailVerified,
-      isAnonymous: auth.currentUser?.isAnonymous,
-      tenantId: auth.currentUser?.tenantId,
+      userId: auth.currentUser?.uid || '',
+      email: auth.currentUser?.email || '',
+      emailVerified: auth.currentUser?.emailVerified || false,
+      isAnonymous: auth.currentUser?.isAnonymous || false,
+      tenantId: auth.currentUser?.tenantId || '',
       providerInfo: auth.currentUser?.providerData.map(provider => ({
         providerId: provider.providerId,
-        displayName: provider.displayName,
-        email: provider.email,
-        photoUrl: provider.photoURL
+        displayName: provider.displayName || '',
+        email: provider.email || '',
+        photoUrl: provider.photoURL || ''
       })) || []
     },
     operationType,
@@ -161,19 +162,6 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
   }
   console.error('Firestore Error: ', JSON.stringify(errInfo));
   throw new Error(JSON.stringify(errInfo));
-}
-
-interface StudyLog {
-  id: string;
-  userId: string;
-  category: string;
-  duration: number; // minutes
-  date: Date;
-  notes?: string;
-  rating: number; // 1-5
-  createdAt: Date;
-  startTime?: string;
-  endTime?: string;
 }
 
 interface UserGoals {
@@ -609,8 +597,10 @@ function AppContent() {
           totalCount++;
           
           // Firestore batch limit is 500
-          if (count >= 450) {
+          if (count >= 400) {
             await batch.commit();
+            // Small delay to keep UI responsive
+            await new Promise(resolve => setTimeout(resolve, 50));
             batch = writeBatch(db);
             count = 0;
           }
@@ -632,161 +622,174 @@ function AppContent() {
     reader.readAsText(file);
   };
 
-  // Analytics
-  const weeklyData = useMemo(() => {
-    const start = startOfWeek(new Date(), { weekStartsOn: 1 });
-    const end = endOfWeek(new Date(), { weekStartsOn: 1 });
-    const days = eachDayOfInterval({ start, end });
+  // Optimized Analytics - Single Pass
+  const analytics = useMemo(() => {
+    const now = new Date();
+    const startOfW = startOfWeek(now, { weekStartsOn: 1 });
+    const endOfW = endOfWeek(now, { weekStartsOn: 1 });
+    const startOfM = startOfMonth(now);
+    const endOfM = endOfMonth(now);
     
-    return days.map(day => {
-      const dayLogs = logs.filter(log => isSameDay(log.date, day));
-      const total = dayLogs.reduce((acc, curr) => acc + curr.duration, 0);
-      return {
-        name: format(day, 'EEE'),
-        minutes: total,
-        hours: (total / 60).toFixed(1)
-      };
-    });
-  }, [logs]);
-
-  const monthlyData = useMemo(() => {
-    const start = startOfMonth(new Date());
-    const end = endOfMonth(new Date());
-    const days = eachDayOfInterval({ start, end });
+    const weekDays = eachDayOfInterval({ start: startOfW, end: endOfW });
+    const monthDays = eachDayOfInterval({ start: startOfM, end: endOfM });
     
-    return days.map(day => {
-      const dayLogs = logs.filter(log => isSameDay(log.date, day));
-      const total = dayLogs.reduce((acc, curr) => acc + curr.duration, 0);
-      return {
-        name: format(day, 'd'),
-        minutes: total
-      };
-    });
-  }, [logs]);
-
-  const categoryData = useMemo(() => {
-    return categories.map((cat) => {
-      const total = logs.reduce((acc, curr) => curr.category === cat ? acc + curr.duration : acc, 0);
-      return {
-        name: cat,
-        value: total,
-        color: getCategoryColor(cat)
-      };
-    }).filter(item => item.value > 0);
-  }, [logs, categories]);
-
-  const stats = useMemo(() => {
-    const totalMinutes = logs.reduce((acc, curr) => acc + curr.duration, 0);
-    const thisWeekMinutes = logs
-      .filter(log => isWithinInterval(log.date, { 
-        start: startOfWeek(new Date(), { weekStartsOn: 1 }), 
-        end: endOfWeek(new Date(), { weekStartsOn: 1 }) 
-      }))
-      .reduce((acc, curr) => acc + curr.duration, 0);
-    
-    const todayMinutes = logs
-      .filter(log => isSameDay(log.date, new Date()))
-      .reduce((acc, curr) => acc + curr.duration, 0);
-
-    return {
-      totalHours: (totalMinutes / 60).toFixed(1),
-      weekHours: (thisWeekMinutes / 60).toFixed(1),
-      todayHours: (todayMinutes / 60).toFixed(1),
-      avgDaily: logs.length > 0 ? (totalMinutes / 60 / 30).toFixed(1) : "0",
-      goalMetDays: weeklyData.filter(d => parseFloat(d.hours) >= (goals.daily / 60)).length
-    };
-  }, [logs, weeklyData, goals.daily]);
-
-  const stackedWeeklyData = useMemo(() => {
-    const start = startOfWeek(new Date(), { weekStartsOn: 1 });
-    const end = endOfWeek(new Date(), { weekStartsOn: 1 });
-    const days = eachDayOfInterval({ start, end });
-    
-    return days.map(day => {
-      const dayLogs = logs.filter(log => isSameDay(log.date, day));
-      const data: any = { name: format(day, 'EEE') };
-      categories.forEach(cat => {
-        data[cat] = dayLogs.filter(l => l.category === cat).reduce((acc, curr) => acc + curr.duration, 0) / 60;
-      });
-      return data;
-    });
-  }, [logs, categories]);
-
-  const radarData = useMemo(() => {
+    const weeklyMap = new Map(weekDays.map(d => [format(d, 'yyyy-MM-dd'), 0]));
+    const monthlyMap = new Map(monthDays.map(d => [format(d, 'yyyy-MM-dd'), 0]));
+    const categoryMap = new Map(categories.map(c => [c, 0]));
+    const stackedWeeklyMap = new Map(weekDays.map(d => [format(d, 'yyyy-MM-dd'), {} as any]));
+    const heatmapMap = new Map();
+    const contributionMap = new Map();
     const baseSubjects = ['QA', 'DILR', 'VARC', 'Mock', 'Revision', 'Other'];
-    return baseSubjects.map(subject => {
-      const total = logs.reduce((acc, curr) => {
-        const cat = curr.category.toUpperCase();
-        if (cat.includes(subject.toUpperCase())) return acc + curr.duration;
-        return acc;
-      }, 0);
-      return {
-        subject,
-        A: total / 60,
-        fullMark: 100 // Scale to 100 hours
-      };
-    });
-  }, [logs]);
-
-  const heatmapData = useMemo(() => {
-    const data = [];
+    const radarMap = new Map(baseSubjects.map(s => [s, 0]));
+    
+    let totalMinutes = 0;
+    let thisWeekMinutes = 0;
+    let todayMinutes = 0;
+    const scatter = [];
+    
     const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    for (let d = 0; d < 7; d++) {
-      for (let h = 0; h < 24; h++) {
-        const volume = logs.filter(log => {
-          const logDay = (log.date.getDay() + 6) % 7; // Mon=0
-          const logHour = log.startTime ? parseInt(log.startTime.split(':')[0]) : -1;
-          return logDay === d && logHour === h;
-        }).reduce((acc, curr) => acc + curr.duration, 0);
-        data.push({ day: days[d], hour: h, value: volume });
-      }
-    }
-    return data;
-  }, [logs]);
 
-  const scatterData = useMemo(() => {
-    return logs.map(log => {
+    for (const log of logs) {
+      const logDateStr = format(log.date, 'yyyy-MM-dd');
+      const duration = log.duration;
+      
+      totalMinutes += duration;
+      
+      if (isSameDay(log.date, now)) {
+        todayMinutes += duration;
+      }
+      
+      if (isWithinInterval(log.date, { start: startOfW, end: endOfW })) {
+        thisWeekMinutes += duration;
+        weeklyMap.set(logDateStr, (weeklyMap.get(logDateStr) || 0) + duration);
+        
+        const stackedData = stackedWeeklyMap.get(logDateStr) || {};
+        stackedData[log.category] = (stackedData[log.category] || 0) + duration / 60;
+        stackedWeeklyMap.set(logDateStr, stackedData);
+      }
+      
+      if (isWithinInterval(log.date, { start: startOfM, end: endOfM })) {
+        monthlyMap.set(logDateStr, (monthlyMap.get(logDateStr) || 0) + duration);
+      }
+      
+      // Contribution data (last 365 days)
+      const startOfContribution = subDays(now, 364);
+      if (isWithinInterval(log.date, { start: startOfContribution, end: now })) {
+        contributionMap.set(logDateStr, (contributionMap.get(logDateStr) || 0) + duration);
+      }
+      
+      if (categoryMap.has(log.category)) {
+        categoryMap.set(log.category, categoryMap.get(log.category)! + duration);
+      }
+      
+      const catUpper = log.category.toUpperCase();
+      for (const subject of baseSubjects) {
+        if (catUpper.includes(subject.toUpperCase())) {
+          radarMap.set(subject, radarMap.get(subject)! + duration);
+        }
+      }
+      
+      const logDay = (log.date.getDay() + 6) % 7;
+      const logHour = log.startTime ? parseInt(log.startTime.split(':')[0]) : -1;
+      if (logHour !== -1) {
+        const key = `${logDay}-${logHour}`;
+        heatmapMap.set(key, (heatmapMap.get(key) || 0) + duration);
+      }
+      
       const [h, m] = log.startTime ? log.startTime.split(':').map(Number) : [0, 0];
-      return {
+      scatter.push({
         time: h + m / 60,
         rating: log.rating || 3,
         duration: log.duration,
         category: log.category
-      };
-    });
-  }, [logs]);
-
-  const contributionData = useMemo(() => {
-    const end = new Date();
-    const start = subDays(end, 364);
-    const days = eachDayOfInterval({ start, end });
-    return days.map(day => {
-      const dayLogs = logs.filter(log => isSameDay(log.date, day));
-      const total = dayLogs.reduce((acc, curr) => acc + curr.duration, 0);
-      return {
-        date: format(day, 'yyyy-MM-dd'),
-        count: total
-      };
-    });
-  }, [logs]);
-
-  const burnupData = useMemo(() => {
-    const start = startOfMonth(new Date());
-    const end = endOfMonth(new Date());
-    const days = eachDayOfInterval({ start, end });
-    let cumulative = 0;
-    const targetPerDay = goals.daily;
+      });
+    }
     
-    return days.map((day, index) => {
-      const dayLogs = logs.filter(log => isSameDay(log.date, day));
-      cumulative += dayLogs.reduce((acc, curr) => acc + curr.duration, 0);
+    const weeklyData = weekDays.map(day => {
+      const dateStr = format(day, 'yyyy-MM-dd');
+      const minutes = weeklyMap.get(dateStr) || 0;
+      return {
+        name: format(day, 'EEE'),
+        minutes,
+        hours: (minutes / 60).toFixed(1)
+      };
+    });
+
+    const monthlyData = monthDays.map(day => {
+      const dateStr = format(day, 'yyyy-MM-dd');
+      return {
+        name: format(day, 'd'),
+        minutes: monthlyMap.get(dateStr) || 0
+      };
+    });
+
+    const categoryData = Array.from(categoryMap.entries())
+      .map(([name, value]) => ({ name, value, color: getCategoryColor(name) }))
+      .filter(item => item.value > 0);
+
+    const stackedWeeklyData = weekDays.map(day => {
+      const dateStr = format(day, 'yyyy-MM-dd');
+      const data = { name: format(day, 'EEE'), ...stackedWeeklyMap.get(dateStr) };
+      return data;
+    });
+
+    const radarData = baseSubjects.map(subject => ({
+      subject,
+      A: radarMap.get(subject)! / 60,
+      fullMark: 100
+    }));
+
+    const heatmapData = [];
+    for (let d = 0; d < 7; d++) {
+      for (let h = 0; h < 24; h++) {
+        heatmapData.push({ day: days[d], hour: h, value: heatmapMap.get(`${d}-${h}`) || 0 });
+      }
+    }
+
+    const contributionData = eachDayOfInterval({ start: subDays(now, 364), end: now }).map(day => {
+      const dateStr = format(day, 'yyyy-MM-dd');
+      return {
+        date: dateStr,
+        count: contributionMap.get(dateStr) || 0
+      };
+    });
+
+    let cumulative = 0;
+    const burnupData = monthDays.map((day, index) => {
+      const dateStr = format(day, 'yyyy-MM-dd');
+      cumulative += monthlyMap.get(dateStr) || 0;
       return {
         name: format(day, 'd'),
         actual: parseFloat((cumulative / 60).toFixed(1)),
-        target: parseFloat(((index + 1) * targetPerDay / 60).toFixed(1))
+        target: parseFloat(((index + 1) * goals.daily / 60).toFixed(1))
       };
     });
-  }, [logs, goals.daily]);
+
+    return {
+      weeklyData,
+      monthlyData,
+      categoryData,
+      stackedWeeklyData,
+      radarData,
+      heatmapData,
+      contributionData,
+      burnupData,
+      scatterData: scatter,
+      stats: {
+        totalHours: (totalMinutes / 60).toFixed(1),
+        weekHours: (thisWeekMinutes / 60).toFixed(1),
+        todayHours: (todayMinutes / 60).toFixed(1),
+        avgDaily: logs.length > 0 ? (totalMinutes / 60 / 30).toFixed(1) : "0",
+        goalMetDays: weeklyData.filter(d => parseFloat(d.hours) >= (goals.daily / 60)).length
+      }
+    };
+  }, [logs, categories, goals.daily]);
+
+  // Destructure optimized analytics
+  const { 
+    weeklyData, monthlyData, categoryData, stackedWeeklyData, 
+    radarData, heatmapData, scatterData, stats, contributionData, burnupData 
+  } = analytics;
 
   if (loading) {
     return (
@@ -1385,7 +1388,7 @@ function AppContent() {
 
           {activeTab === 'timer' && (
             <div className="max-w-4xl mx-auto">
-              <TimerCard />
+              <TimerCard logs={logs} />
             </div>
           )}
 

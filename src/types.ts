@@ -1,6 +1,19 @@
 export type TimerMode = 'focus' | 'break' | 'long-break' | 'mock' | 'marathon';
 export type TimerStatus = 'idle' | 'running' | 'paused' | 'overtime';
 
+export interface StudyLog {
+  id: string;
+  userId: string;
+  category: string;
+  duration: number; // minutes
+  date: Date;
+  notes?: string;
+  rating: number; // 1-5
+  createdAt: Date;
+  startTime?: string;
+  endTime?: string;
+}
+
 export interface Session {
   id: string;
   timestamp: number;
