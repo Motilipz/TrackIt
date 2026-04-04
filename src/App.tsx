@@ -10,7 +10,7 @@ import {
   Calendar, Clock, BookOpen, BarChart3, History, Download, 
   Plus, Trash2, LogOut, LayoutDashboard, ChevronLeft, ChevronRight,
   Target, Award, TrendingUp, Settings as SettingsIcon, Save, RotateCcw, X, Star, AlertTriangle, Maximize2,
-  Sun, Moon, Monitor, Menu
+  Sun, Moon, Monitor, Menu, FileJson, Upload, FileUp
 } from 'lucide-react';
 import { format, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay, subDays, startOfMonth, endOfMonth, subMonths, parseISO, isWithinInterval, addHours } from 'date-fns';
 import { clsx, type ClassValue } from 'clsx';
@@ -18,7 +18,7 @@ import { twMerge } from 'tailwind-merge';
 
 import { 
   auth, db, googleProvider, signInWithPopup, signOut, onAuthStateChanged, User,
-  collection, doc, addDoc, deleteDoc, query, where, orderBy, onSnapshot, Timestamp, setDoc, getDoc
+  collection, doc, addDoc, deleteDoc, query, where, orderBy, onSnapshot, Timestamp, setDoc, getDoc, writeBatch
 } from './firebase';
 
 import { TimerCard } from './components/TimerCard';
@@ -292,6 +292,8 @@ function AppContent() {
   const [rating, setRating] = useState(3);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
 
   useEffect(() => {
     if (activeTab === 'log' && !editingLogId) {
@@ -539,6 +541,95 @@ function AppContent() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  const handleExportJSON = () => {
+    if (logs.length === 0) return;
+    
+    // Convert logs to a format that's easy to import back
+    const dataStr = JSON.stringify(logs, null, 2);
+    const blob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    
+    const exportFileDefaultName = `cat-prep-logs-${format(new Date(), 'yyyy-MM-dd')}.json`;
+    
+    const linkElement = document.createElement('a');
+    linkElement.setAttribute('href', url);
+    linkElement.setAttribute('download', exportFileDefaultName);
+    document.body.appendChild(linkElement);
+    linkElement.click();
+    document.body.removeChild(linkElement);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportJSON = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
+    setIsImporting(true);
+    setImportError(null);
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const content = event.target?.result as string;
+        const importedLogs = JSON.parse(content);
+
+        if (!Array.isArray(importedLogs)) {
+          throw new Error("Invalid file format. Expected an array of logs.");
+        }
+
+        let batch = writeBatch(db);
+        let count = 0;
+        let totalCount = 0;
+
+        for (const log of importedLogs) {
+          // Basic validation
+          if (!log.category || !log.duration || !log.date) continue;
+
+          const logRef = doc(collection(db, 'users', user.uid, 'logs'));
+          
+          // Convert date string back to Timestamp
+          const logDate = new Date(log.date);
+          
+          batch.set(logRef, {
+            userId: user.uid,
+            category: log.category,
+            duration: log.duration,
+            date: Timestamp.fromDate(logDate),
+            notes: log.notes || '',
+            rating: log.rating || 3,
+            startTime: log.startTime || null,
+            endTime: log.endTime || null,
+            createdAt: Timestamp.now(),
+            updatedAt: Timestamp.now()
+          });
+          
+          count++;
+          totalCount++;
+          
+          // Firestore batch limit is 500
+          if (count >= 450) {
+            await batch.commit();
+            batch = writeBatch(db);
+            count = 0;
+          }
+        }
+
+        if (count > 0) {
+          await batch.commit();
+        }
+        
+        alert(`Successfully imported ${totalCount} logs!`);
+        e.target.value = ''; // Reset input
+      } catch (err) {
+        console.error("Import error:", err);
+        setImportError(err instanceof Error ? err.message : "Failed to import logs.");
+      } finally {
+        setIsImporting(false);
+      }
+    };
+    reader.readAsText(file);
   };
 
   // Analytics
@@ -1377,6 +1468,71 @@ function AppContent() {
                         </button>
                       </div>
                     ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white dark:bg-zinc-900 p-8 rounded-3xl border border-slate-100 dark:border-zinc-800 shadow-sm">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-2 bg-slate-100 dark:bg-zinc-800 rounded-xl">
+                    <SettingsIcon className="w-6 h-6 text-slate-600 dark:text-zinc-400" />
+                  </div>
+                  <h2 className="text-2xl font-bold dark:text-white">Data Management</h2>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="p-6 bg-slate-50 dark:bg-zinc-800 rounded-2xl border border-slate-200 dark:border-zinc-700 flex flex-col">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="p-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg">
+                        <FileJson className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                      </div>
+                      <h3 className="font-bold dark:text-white">Export Logs</h3>
+                    </div>
+                    <p className="text-sm text-slate-500 dark:text-zinc-400 mb-6 flex-grow">
+                      Download all your study logs as a JSON file. This is perfect for backups or migrating to a new device.
+                    </p>
+                    <button 
+                      onClick={handleExportJSON}
+                      className="w-full py-3 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 text-slate-700 dark:text-zinc-300 font-bold rounded-xl hover:bg-slate-50 dark:hover:bg-zinc-800 transition-colors flex items-center justify-center gap-2"
+                    >
+                      <Download className="w-4 h-4" />
+                      Export JSON
+                    </button>
+                  </div>
+
+                  <div className="p-6 bg-slate-50 dark:bg-zinc-800 rounded-2xl border border-slate-200 dark:border-zinc-700 flex flex-col">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="p-2 bg-emerald-100 dark:bg-emerald-900/30 rounded-lg">
+                        <Upload className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                      </div>
+                      <h3 className="font-bold dark:text-white">Import Logs</h3>
+                    </div>
+                    <p className="text-sm text-slate-500 dark:text-zinc-400 mb-6 flex-grow">
+                      Migrate your data from a previous version or restore a backup. This will append logs to your current list.
+                    </p>
+                    <label className="block cursor-pointer">
+                      <div className={cn(
+                        "w-full py-3 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2",
+                        isImporting && "opacity-50 cursor-not-allowed"
+                      )}>
+                        {isImporting ? (
+                          <RotateCcw className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <FileUp className="w-4 h-4" />
+                        )}
+                        {isImporting ? "Importing..." : "Import JSON"}
+                      </div>
+                      <input 
+                        type="file" 
+                        accept=".json" 
+                        onChange={handleImportJSON} 
+                        className="hidden" 
+                        disabled={isImporting}
+                      />
+                    </label>
+                    {importError && (
+                      <p className="mt-2 text-xs text-red-600 dark:text-red-400 font-medium">{importError}</p>
+                    )}
                   </div>
                 </div>
               </div>
