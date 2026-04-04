@@ -30,26 +30,20 @@ const AMBIENT_SOUNDS = [
   { id: 'custom', name: 'Custom URL', icon: Link },
 ];
 
-const IRON_MIND_QUOTES = {
-  stoicism: [
-    { text: "He who has a why to live can bear almost any how.", author: "Friedrich Nietzsche" },
-    { text: "Very little is needed to make a happy life; it is all within yourself, in your way of thinking.", author: "Marcus Aurelius" },
-    { text: "The impediment to action advances action. What stands in the way becomes the way.", author: "Marcus Aurelius" },
-    { text: "It is not death that a man should fear, but he should fear never beginning to live.", author: "Marcus Aurelius" }
-  ],
-  psychology: [
-    { text: "The secret of existence is not just to live, but to have something to live for.", author: "Fyodor Dostoevsky" },
-    { text: "To live is to suffer, to survive is to find some meaning in the suffering.", author: "Friedrich Nietzsche" },
-    { text: "Pain is inevitable. Suffering is optional.", author: "Haruki Murakami" },
-    { text: "The more we do, the more we can do.", author: "William Hazlitt" }
-  ],
-  strategy: [
-    { text: "Where the willingness is great, the difficulties cannot be great.", author: "Niccolò Machiavelli" },
-    { text: "The man of character finds an objective in every difficulty.", author: "Niccolò Machiavelli" },
-    { text: "That which does not kill us makes us stronger.", author: "Friedrich Nietzsche" },
-    { text: "Victory belongs to the most persevering.", author: "Napoleon Bonaparte" }
-  ]
-};
+const IRON_MIND_QUOTES = [
+  { text: "He who has a why to live can bear almost any how.", author: "Friedrich Nietzsche" },
+  { text: "Very little is needed to make a happy life; it is all within yourself, in your way of thinking.", author: "Marcus Aurelius" },
+  { text: "The impediment to action advances action. What stands in the way becomes the way.", author: "Marcus Aurelius" },
+  { text: "It is not death that a man should fear, but he should fear never beginning to live.", author: "Marcus Aurelius" },
+  { text: "The secret of existence is not just to live, but to have something to live for.", author: "Fyodor Dostoevsky" },
+  { text: "To live is to suffer, to survive is to find some meaning in the suffering.", author: "Friedrich Nietzsche" },
+  { text: "Pain is inevitable. Suffering is optional.", author: "Haruki Murakami" },
+  { text: "The more we do, the more we can do.", author: "William Hazlitt" },
+  { text: "Where the willingness is great, the difficulties cannot be great.", author: "Niccolò Machiavelli" },
+  { text: "The man of character finds an objective in every difficulty.", author: "Niccolò Machiavelli" },
+  { text: "That which does not kill us makes us stronger.", author: "Friedrich Nietzsche" },
+  { text: "Victory belongs to the most persevering.", author: "Napoleon Bonaparte" }
+];
 
 const STRATEGIC_TAGS = [
   "High-Value Strength",
@@ -97,16 +91,14 @@ export const TimerCard = ({ logs = [] }: { logs?: StudyLog[] }) => {
   const [showCustomInput, setShowCustomInput] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  const [quoteCategory, setQuoteCategory] = useState<keyof typeof IRON_MIND_QUOTES>('stoicism');
-  const [quote, setQuote] = useState(IRON_MIND_QUOTES.stoicism[0]);
+  const [quote, setQuote] = useState(IRON_MIND_QUOTES[0]);
 
   useEffect(() => {
     if (timer.status === 'idle' || timer.mode === 'break' || timer.mode === 'long-break') {
-      const currentQuotes = IRON_MIND_QUOTES[quoteCategory];
-      const randomQuote = currentQuotes[Math.floor(Math.random() * currentQuotes.length)];
+      const randomQuote = IRON_MIND_QUOTES[Math.floor(Math.random() * IRON_MIND_QUOTES.length)];
       setQuote(randomQuote);
     }
-  }, [timer.status, timer.mode, quoteCategory]);
+  }, [timer.status, timer.mode]);
 
   const exportCSV = () => {
     // This would ideally fetch from Firebase, but for now we'll use a placeholder
@@ -602,20 +594,6 @@ export const TimerCard = ({ logs = [] }: { logs?: StudyLog[] }) => {
                 animate={{ opacity: 1, y: 0 }}
                 className="text-center max-w-md mb-8 relative z-10"
               >
-                <div className="flex justify-center gap-4 mb-4">
-                  {(Object.keys(IRON_MIND_QUOTES) as Array<keyof typeof IRON_MIND_QUOTES>).map((cat) => (
-                    <button
-                      key={cat}
-                      onClick={() => setQuoteCategory(cat)}
-                      className={cn(
-                        "text-[10px] uppercase font-bold tracking-widest transition-colors",
-                        quoteCategory === cat ? "text-indigo-600 dark:text-indigo-400" : "text-slate-400 hover:text-slate-600"
-                      )}
-                    >
-                      {cat}
-                    </button>
-                  ))}
-                </div>
                 <p className="text-lg font-serif italic text-slate-700 dark:text-zinc-300 mb-2">"{quote.text}"</p>
                 <p className="text-xs font-bold uppercase tracking-widest text-slate-400 dark:text-zinc-500">— {quote.author}</p>
               </motion.div>
