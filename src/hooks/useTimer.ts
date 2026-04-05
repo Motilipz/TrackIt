@@ -13,6 +13,38 @@ export const useTimer = (initialSettings: TimerSettings) => {
   
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Sync timeLeft with settings when idle or when mode/settings change
+  useEffect(() => {
+    if (status === 'idle') {
+      if (settings.marathonMode) {
+        setMode('marathon');
+        setMarathonSection('VARC');
+        setTimeLeft(40 * 60);
+      } else if (settings.mockMode) {
+        setMode('mock');
+        setTimeLeft(settings.mockTime * 60);
+      } else {
+        if (mode === 'focus') setTimeLeft(settings.focusTime * 60);
+        else if (mode === 'break') setTimeLeft(settings.breakTime * 60);
+        else if (mode === 'long-break') setTimeLeft(settings.longBreakTime * 60);
+        else if (mode === 'mock') setTimeLeft(settings.mockTime * 60);
+        else if (mode === 'marathon') {
+          setMarathonSection('VARC');
+          setTimeLeft(40 * 60);
+        }
+      }
+    }
+  }, [
+    status, 
+    mode, 
+    settings.marathonMode, 
+    settings.mockMode, 
+    settings.focusTime, 
+    settings.breakTime, 
+    settings.longBreakTime, 
+    settings.mockTime
+  ]);
+
   const resetTimer = useCallback(() => {
     if (timerRef.current) clearInterval(timerRef.current);
     setStatus('idle');

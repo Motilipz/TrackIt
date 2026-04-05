@@ -786,14 +786,12 @@ export const TimerCard = ({ logs = [] }: { logs?: StudyLog[] }) => {
                       <button 
                         onClick={() => {
                           const newMock = !timer.settings.mockMode;
-                          timer.setSettings({...timer.settings, mockMode: newMock});
-                          if (newMock) {
-                            timer.setMode('mock');
-                            timer.setStatus('idle');
-                          } else {
-                            timer.setMode('focus');
-                            timer.setStatus('idle');
-                          }
+                          timer.setSettings({
+                            ...timer.settings, 
+                            mockMode: newMock,
+                            marathonMode: false
+                          });
+                          timer.setStatus('idle');
                         }}
                         className={cn("w-10 h-5 rounded-full transition-colors relative", timer.settings.mockMode ? "bg-purple-600" : "bg-slate-200 dark:bg-zinc-700")}
                       >
@@ -809,7 +807,10 @@ export const TimerCard = ({ logs = [] }: { logs?: StudyLog[] }) => {
                         <input 
                           type="number" 
                           value={timer.settings.focusTime}
-                          onChange={(e) => timer.setSettings({...timer.settings, focusTime: parseInt(e.target.value) || 1})}
+                          onChange={(e) => {
+                            timer.setSettings({...timer.settings, focusTime: parseInt(e.target.value) || 1});
+                            timer.setStatus('idle');
+                          }}
                           className="w-full bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm dark:text-white"
                         />
                       </div>
@@ -818,7 +819,10 @@ export const TimerCard = ({ logs = [] }: { logs?: StudyLog[] }) => {
                         <input 
                           type="number" 
                           value={timer.settings.breakTime}
-                          onChange={(e) => timer.setSettings({...timer.settings, breakTime: parseInt(e.target.value) || 1})}
+                          onChange={(e) => {
+                            timer.setSettings({...timer.settings, breakTime: parseInt(e.target.value) || 1});
+                            timer.setStatus('idle');
+                          }}
                           className="w-full bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm dark:text-white"
                         />
                       </div>
@@ -827,14 +831,12 @@ export const TimerCard = ({ logs = [] }: { logs?: StudyLog[] }) => {
                       <button 
                         onClick={() => {
                           const newMarathon = !timer.settings.marathonMode;
-                          timer.setSettings({...timer.settings, marathonMode: newMarathon, mockMode: false});
-                          if (newMarathon) {
-                            timer.setMode('marathon');
-                            timer.setStatus('idle');
-                          } else {
-                            timer.setMode('focus');
-                            timer.setStatus('idle');
-                          }
+                          timer.setSettings({
+                            ...timer.settings, 
+                            marathonMode: newMarathon, 
+                            mockMode: false
+                          });
+                          timer.setStatus('idle');
                         }}
                         className={cn(
                           "flex flex-col items-center gap-2 p-3 rounded-xl border transition-all",
@@ -867,7 +869,10 @@ export const TimerCard = ({ logs = [] }: { logs?: StudyLog[] }) => {
                         <input 
                           type="number" 
                           value={timer.settings.mockTime}
-                          onChange={(e) => timer.setSettings({...timer.settings, mockTime: parseInt(e.target.value) || 1})}
+                          onChange={(e) => {
+                            timer.setSettings({...timer.settings, mockTime: parseInt(e.target.value) || 1});
+                            timer.setStatus('idle');
+                          }}
                           className="w-full bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm dark:text-white"
                         />
                       </div>
@@ -876,7 +881,10 @@ export const TimerCard = ({ logs = [] }: { logs?: StudyLog[] }) => {
                         <input 
                           type="number" 
                           value={timer.settings.mockSplitTime}
-                          onChange={(e) => timer.setSettings({...timer.settings, mockSplitTime: parseInt(e.target.value) || 1})}
+                          onChange={(e) => {
+                            timer.setSettings({...timer.settings, mockSplitTime: parseInt(e.target.value) || 1});
+                            timer.setStatus('idle');
+                          }}
                           className="w-full bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm dark:text-white"
                         />
                       </div>
