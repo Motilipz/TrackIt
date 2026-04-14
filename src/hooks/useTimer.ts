@@ -70,13 +70,13 @@ export const useTimer = (initialSettings: TimerSettings) => {
     setStatus('running');
   };
 
-  const pauseTimer = () => {
-    if (settings.strictMode && status === 'running') return;
+  const pauseTimer = (force = false) => {
+    if (!force && settings.strictMode && status === 'running') return;
     setStatus('paused');
   };
 
-  const toggleTimer = () => {
-    if (status === 'running') pauseTimer();
+  const toggleTimer = (force = false) => {
+    if (status === 'running') pauseTimer(force);
     else startTimer();
   };
 

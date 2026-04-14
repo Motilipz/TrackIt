@@ -446,7 +446,7 @@ export const TimerCard = ({ logs = [] }: { logs?: StudyLog[] }) => {
                     {formatTime(timer.status === 'overtime' ? timer.overtimeSeconds : timer.timeLeft)}
                   </div>
                   <button 
-                    onClick={timer.toggleTimer}
+                    onClick={() => timer.toggleTimer(true)}
                     className="px-8 py-4 bg-red-600 hover:bg-red-500 text-white rounded-2xl font-bold transition-all"
                   >
                     EMERGENCY UNLOCK
@@ -686,7 +686,7 @@ export const TimerCard = ({ logs = [] }: { logs?: StudyLog[] }) => {
               </button>
               
               <button 
-                onClick={timer.toggleTimer}
+                onClick={() => timer.toggleTimer()}
                 className={cn(
                   "flex-1 py-4 rounded-2xl font-bold text-lg flex items-center justify-center gap-2 transition-all shadow-lg",
                   timer.status === 'running' 
