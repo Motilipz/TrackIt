@@ -31,12 +31,36 @@
         "daily": { "type": "number", "description": "Daily study goal in minutes." },
         "weekly": { "type": "number", "description": "Weekly study goal in minutes." }
       }
+    },
+    "ReadingLog": {
+      "title": "ReadingLog",
+      "description": "An entry for a reading session in the Reading Velocity Engine.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "excerpt": { "type": "string" },
+        "wordCount": { "type": "number" },
+        "duration": { "type": "number" },
+        "wpm": { "type": "number" },
+        "gradeLevel": { "type": "number" },
+        "comprehensionSummary": { "type": "string" },
+        "domain": { "type": "string" },
+        "date": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "title", "excerpt", "wordCount", "duration", "wpm", "date", "createdAt"]
     }
   },
   "firestore": {
     "/users/{userId}/logs/{logId}": {
       "schema": "StudyLog",
       "description": "User's study logs."
+    },
+    "/users/{userId}/readingLogs/{logId}": {
+      "schema": "ReadingLog",
+      "description": "User's reading velocity logs."
     },
     "/users/{userId}/settings/{settingId}": {
       "schema": "UserSettings",

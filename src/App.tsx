@@ -10,7 +10,7 @@ import {
   Calendar, Clock, BookOpen, BarChart3, History, Download, 
   Plus, Trash2, LogOut, LayoutDashboard, ChevronLeft, ChevronRight,
   Target, Award, TrendingUp, Settings as SettingsIcon, Save, RotateCcw, X, Star, AlertTriangle, Maximize2,
-  Sun, Moon, Monitor, Menu, FileJson, Upload, FileUp
+  Sun, Moon, Monitor, Menu, FileJson, Upload, FileUp, Gauge
 } from 'lucide-react';
 import { format, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay, subDays, startOfMonth, endOfMonth, subMonths, parseISO, isWithinInterval, addHours } from 'date-fns';
 import { clsx, type ClassValue } from 'clsx';
@@ -22,7 +22,10 @@ import {
 } from './firebase';
 
 import { TimerCard } from './components/TimerCard';
-import { StudyLog } from './types';
+import { ReadingVelocityEngine } from './components/ReadingVelocityEngine';
+import { StudyLog, ReadingLog } from './types';
+
+const DOMAINS = ['Philosophy', 'Economics', 'Sociology', 'Science', 'Literature', 'History', 'Technology'];
 
 // Theme Types
 type Theme = 'light' | 'dark' | 'system';
@@ -255,11 +258,12 @@ function AppContent() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [logs, setLogs] = useState<StudyLog[]>([]);
+  const [readingLogs, setReadingLogs] = useState<ReadingLog[]>([]);
   const [categories, setCategories] = useState<string[]>(DEFAULT_CATEGORIES);
   const [goals, setGoals] = useState<UserGoals>({ daily: 120, weekly: 840 });
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'log' | 'history' | 'timer' | 'settings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'log' | 'history' | 'timer' | 'reading' | 'settings'>('dashboard');
   
   // Editing state
   const [editingLogId, setEditingLogId] = useState<string | null>(null);
@@ -323,6 +327,35 @@ function AppContent() {
       setLogs(newLogs);
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, `users/${user.uid}/logs`);
+    });
+
+    return () => unsubscribe();
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) {
+      setReadingLogs([]);
+      return;
+    }
+
+    const q = query(
+      collection(db, 'users', user.uid, 'readingLogs'),
+      orderBy('date', 'desc')
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const newLogs = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          date: data.date.toDate(),
+          createdAt: data.createdAt.toDate()
+        } as unknown as ReadingLog;
+      });
+      setReadingLogs(newLogs);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, `users/${user.uid}/readingLogs`);
     });
 
     return () => unsubscribe();
@@ -510,17 +543,23 @@ function AppContent() {
   };
 
   const downloadCSV = () => {
-    if (logs.length === 0) return;
+    const combinedLogs = [
+      ...logs.map(l => ({ date: l.date, category: l.category, duration: l.duration, notes: l.notes || "", type: 'Study' })),
+      ...readingLogs.map(l => ({ date: l.date, category: l.domain, duration: Math.floor(l.duration / 60), notes: l.comprehensionSummary, type: 'Reading' }))
+    ].sort((a, b) => b.date.getTime() - a.date.getTime());
+
+    if (combinedLogs.length === 0) return;
     
-    const headers = ["Date", "Category", "Duration (min)", "Notes"];
-    const rows = logs.map(log => [
+    const headers = ["Date", "Type", "Category/Domain", "Duration (min)", "Performance/Notes"];
+    const rows = combinedLogs.map(log => [
       format(log.date, 'yyyy-MM-dd'),
+      log.type,
       log.category,
       log.duration,
-      log.notes || ""
+      log.notes
     ]);
     
-    const csvContent = [headers, ...rows].map(e => e.join(",")).join("\n");
+    const csvContent = [headers, ...rows].map(e => e.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(",")).join("\n");
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -636,11 +675,14 @@ function AppContent() {
     const weeklyMap = new Map(weekDays.map(d => [format(d, 'yyyy-MM-dd'), 0]));
     const monthlyMap = new Map(monthDays.map(d => [format(d, 'yyyy-MM-dd'), 0]));
     const categoryMap = new Map(categories.map(c => [c, 0]));
+    if (!categoryMap.has('VARC')) categoryMap.set('VARC', 0);
     const stackedWeeklyMap = new Map(weekDays.map(d => [format(d, 'yyyy-MM-dd'), {} as any]));
     const heatmapMap = new Map();
     const contributionMap = new Map();
     const baseSubjects = ['QA', 'DILR', 'VARC', 'Mock', 'Revision', 'Other'];
     const radarMap = new Map(baseSubjects.map(s => [s, 0]));
+    const readingRadarMap = new Map(baseSubjects.map(s => [s, { totalWpm: 0, count: 0 }]));
+    const domainVelocityMap = new Map(DOMAINS.map(d => [d, [] as any[]]));
     
     let totalMinutes = 0;
     let thisWeekMinutes = 0;
@@ -704,6 +746,49 @@ function AppContent() {
         category: log.category
       });
     }
+
+    for (const rLog of readingLogs) {
+      const logDateStr = format(rLog.date, 'yyyy-MM-dd');
+      const durationMins = Math.floor(rLog.duration / 60);
+      
+      totalMinutes += durationMins;
+      
+      if (isSameDay(rLog.date, now)) {
+        todayMinutes += durationMins;
+      }
+      
+      if (isWithinInterval(rLog.date, { start: startOfW, end: endOfW })) {
+        thisWeekMinutes += durationMins;
+        weeklyMap.set(logDateStr, (weeklyMap.get(logDateStr) || 0) + durationMins);
+        
+        const stackedData = stackedWeeklyMap.get(logDateStr) || {};
+        const readingCat = 'VARC';
+        stackedData[readingCat] = (stackedData[readingCat] || 0) + durationMins / 60;
+        stackedWeeklyMap.set(logDateStr, stackedData);
+      }
+      
+      if (isWithinInterval(rLog.date, { start: startOfM, end: endOfM })) {
+        monthlyMap.set(logDateStr, (monthlyMap.get(logDateStr) || 0) + durationMins);
+      }
+      
+      const startOfContribution = subDays(now, 364);
+      if (isWithinInterval(rLog.date, { start: startOfContribution, end: now })) {
+        contributionMap.set(logDateStr, (contributionMap.get(logDateStr) || 0) + durationMins);
+      }
+
+      const subject = 'VARC';
+      const current = readingRadarMap.get(subject)!;
+      readingRadarMap.set(subject, {
+        totalWpm: current.totalWpm + rLog.wpm,
+        count: current.count + 1
+      });
+
+      const domainLogs = domainVelocityMap.get(rLog.domain) || [];
+      domainLogs.push(rLog);
+      domainVelocityMap.set(rLog.domain, domainLogs);
+      
+      categoryMap.set('VARC', (categoryMap.get('VARC') || 0) + durationMins);
+    }
     
     const weeklyData = weekDays.map(day => {
       const dateStr = format(day, 'yyyy-MM-dd');
@@ -733,11 +818,24 @@ function AppContent() {
       return data;
     });
 
-    const radarData = baseSubjects.map(subject => ({
-      subject,
-      A: radarMap.get(subject)! / 60,
-      fullMark: 100
-    }));
+    const radarData = baseSubjects.map(subject => {
+      return {
+        subject,
+        A: radarMap.get(subject)! / 60,
+        fullMark: 100
+      };
+    });
+
+    const readingTrendData = readingLogs.slice().reverse().map(log => {
+      const entry: any = {
+        date: format(log.date, 'MMM dd'),
+        wpm: log.wpm,
+        target: 350
+      };
+      // Add domain specific data for trend juctaposition
+      entry[log.domain] = log.wpm;
+      return entry;
+    });
 
     const heatmapData = [];
     for (let d = 0; d < 7; d++) {
@@ -779,16 +877,18 @@ function AppContent() {
         totalHours: (totalMinutes / 60).toFixed(1),
         weekHours: (thisWeekMinutes / 60).toFixed(1),
         todayHours: (todayMinutes / 60).toFixed(1),
-        avgDaily: logs.length > 0 ? (totalMinutes / 60 / 30).toFixed(1) : "0",
+        avgDaily: (logs.length + readingLogs.length) > 0 ? (totalMinutes / 60 / 30).toFixed(1) : "0",
         goalMetDays: weeklyData.filter(d => parseFloat(d.hours) >= (goals.daily / 60)).length
-      }
+      },
+      readingTrendData
     };
-  }, [logs, categories, goals.daily]);
+  }, [logs, readingLogs, categories, goals.daily]);
 
   // Destructure optimized analytics
   const { 
     weeklyData, monthlyData, categoryData, stackedWeeklyData, 
-    radarData, heatmapData, scatterData, stats, contributionData, burnupData 
+    radarData, heatmapData, scatterData, stats, contributionData, burnupData,
+    readingTrendData
   } = analytics;
 
   if (loading) {
@@ -912,6 +1012,16 @@ function AppContent() {
           >
             <Clock className="w-5 h-5" />
             Timer Mode
+          </button>
+          <button
+            onClick={() => setActiveTab('reading')}
+            className={cn(
+              "w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors",
+              activeTab === 'reading' ? "bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400" : "text-slate-600 dark:text-zinc-400 hover:bg-slate-50 dark:hover:bg-zinc-800"
+            )}
+          >
+            <Gauge className="w-5 h-5" />
+            Active Reading (RVE)
           </button>
           <button
             onClick={() => setActiveTab('settings')}
@@ -1071,9 +1181,37 @@ function AppContent() {
                         <PolarGrid stroke={resolvedTheme === 'dark' ? '#27272a' : '#f1f5f9'} />
                         <PolarAngleAxis dataKey="subject" tick={{ fill: resolvedTheme === 'dark' ? '#71717a' : '#64748b', fontSize: 10 }} />
                         <PolarRadiusAxis angle={30} domain={[0, 'auto']} tick={false} axisLine={false} />
-                        <Radar name="Study Volume" dataKey="A" stroke="#6366f1" fill="#6366f1" fillOpacity={0.6} />
+                        <Radar name="Study Volume" dataKey="A" stroke="#6366f1" fill="#6366f1" fillOpacity={0.4} />
                         <Tooltip contentStyle={{ backgroundColor: resolvedTheme === 'dark' ? '#18181b' : '#fff', borderRadius: '12px', border: 'none' }} />
+                        <Legend iconType="circle" wrapperStyle={{ fontSize: '10px' }} />
                       </RadarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                {/* Velocity Trendline */}
+                <div className="bg-white dark:bg-zinc-900 p-6 rounded-3xl border border-slate-100 dark:border-zinc-800 shadow-sm lg:col-span-2">
+                  <div className="flex items-center justify-between mb-6">
+                    <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                      <Gauge className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                      Velocity Trendline (WPM)
+                    </h3>
+                  </div>
+                  <div className="h-64">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={readingTrendData}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={resolvedTheme === 'dark' ? '#27272a' : '#f1f5f9'} />
+                        <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: resolvedTheme === 'dark' ? '#71717a' : '#64748b', fontSize: 12 }} />
+                        <YAxis axisLine={false} tickLine={false} tick={{ fill: resolvedTheme === 'dark' ? '#71717a' : '#64748b', fontSize: 12 }} />
+                        <Tooltip contentStyle={{ backgroundColor: resolvedTheme === 'dark' ? '#18181b' : '#fff', borderRadius: '12px', border: 'none' }} />
+                        <Legend verticalAlign="top" height={36}/>
+                        <Line type="monotone" dataKey="wpm" name="Aggregate Speed" stroke="#6366f1" strokeWidth={3} dot={{ r: 4, fill: '#6366f1' }} activeDot={{ r: 6 }} />
+                        <Line type="monotone" dataKey="Philosophy" name="Philosophy" stroke="#ef4444" strokeWidth={1} dot={false} connectNulls />
+                        <Line type="monotone" dataKey="Economics" name="Economics" stroke="#f59e0b" strokeWidth={1} dot={false} connectNulls />
+                        <Line type="monotone" dataKey="Sociology" name="Sociology" stroke="#10b981" strokeWidth={1} dot={false} connectNulls />
+                        <Line type="monotone" dataKey="Technology" name="Technology" stroke="#3b82f6" strokeWidth={1} dot={false} connectNulls />
+                        <Line type="monotone" dataKey="target" name="Target Trajectory" stroke="#94a3b8" strokeDasharray="5 5" dot={false} />
+                      </LineChart>
                     </ResponsiveContainer>
                   </div>
                 </div>
@@ -1343,39 +1481,80 @@ function AppContent() {
           {activeTab === 'history' && (
             <div className="space-y-6">
               <div className="flex justify-between items-center">
-                <h2 className="text-2xl font-bold dark:text-white">Study History</h2>
-                <button 
-                  onClick={downloadCSV}
-                  className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl text-sm font-medium hover:bg-slate-50 dark:hover:bg-zinc-800 transition-colors dark:text-white"
-                >
-                  <Download className="w-4 h-4" />
-                  Export CSV
-                </button>
+                <h2 className="text-2xl font-bold dark:text-white">Unified Learning History</h2>
+                <div className="flex gap-4">
+                  <button 
+                    onClick={downloadCSV}
+                    className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl text-sm font-medium hover:bg-slate-50 dark:hover:bg-zinc-800 transition-colors dark:text-white"
+                  >
+                    <Download className="w-4 h-4" />
+                    Export CSV
+                  </button>
+                </div>
               </div>
               <div className="bg-white dark:bg-zinc-900 rounded-3xl border border-slate-100 dark:border-zinc-800 overflow-hidden shadow-sm">
                 <table className="w-full text-left">
                   <thead className="bg-slate-50 dark:bg-zinc-800/50 border-b border-slate-100 dark:border-zinc-800">
                     <tr>
                       <th className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-zinc-400 uppercase tracking-wider">Date</th>
-                      <th className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-zinc-400 uppercase tracking-wider">Category</th>
+                      <th className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-zinc-400 uppercase tracking-wider">Type</th>
+                      <th className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-zinc-400 uppercase tracking-wider">Category/Domain</th>
                       <th className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-zinc-400 uppercase tracking-wider">Duration</th>
-                      <th className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-zinc-400 uppercase tracking-wider">Notes</th>
+                      <th className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-zinc-400 uppercase tracking-wider">Performance</th>
                       <th className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-zinc-400 uppercase tracking-wider text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-zinc-800">
-                    {logs.map(log => (
-                      <tr key={log.id} className="hover:bg-slate-50 dark:hover:bg-zinc-800 transition-colors">
-                        <td className="px-6 py-4 text-sm text-slate-600 dark:text-zinc-400">{format(log.date, 'MMM d, yyyy')}</td>
+                    {[
+                      ...logs.map(l => ({ ...l, logType: 'Study' as const })),
+                      ...readingLogs.map(l => ({ ...l, logType: 'Reading' as const, category: l.domain, duration: Math.floor(l.duration / 60), notes: l.comprehensionSummary }))
+                    ].sort((a, b) => (b.date?.getTime() || 0) - (a.date?.getTime() || 0)).map((item, idx) => (
+                      <tr key={`${item.id || idx}-${idx}`} className="hover:bg-slate-50 dark:hover:bg-zinc-800 transition-colors">
+                        <td className="px-6 py-4 text-sm text-slate-600 dark:text-zinc-400">{item.date ? format(item.date, 'MMM d, yyyy') : 'Invalid Date'}</td>
                         <td className="px-6 py-4">
-                          <span className="px-3 py-1 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 text-xs font-bold rounded-full">{log.category}</span>
+                          <span className={cn(
+                            "px-3 py-1 text-xs font-bold rounded-full",
+                            item.logType === 'Study' ? "bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400" : "bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400"
+                          )}>
+                            {item.logType}
+                          </span>
                         </td>
-                        <td className="px-6 py-4 text-sm text-slate-600 dark:text-zinc-400">{log.duration} mins</td>
-                        <td className="px-6 py-4 text-sm text-slate-500 dark:text-zinc-500 max-w-xs truncate">{log.notes}</td>
+                        <td className="px-6 py-4">
+                          <span className="text-sm font-medium dark:text-zinc-300">{item.category}</span>
+                        </td>
+                        <td className="px-6 py-4 text-sm text-slate-600 dark:text-zinc-400">{item.duration} mins</td>
+                        <td className="px-6 py-4 text-sm text-slate-500 dark:text-zinc-500">
+                          {item.logType === 'Reading' ? (
+                            <div className="flex flex-col">
+                              <span className="font-bold text-emerald-600 dark:text-emerald-400">{(item as any).wpm} WPM</span>
+                              <span className="text-[10px] truncate max-w-[120px] italic">{(item as any).notes}</span>
+                            </div>
+                          ) : (
+                            <div className="flex flex-col">
+                              <span className="font-bold text-indigo-600 dark:text-indigo-400">{(item as any).rating || 3}/5 Focus</span>
+                              <span className="text-[10px] truncate max-w-[120px] italic">{(item as any).notes}</span>
+                            </div>
+                          )}
+                        </td>
                         <td className="px-6 py-4 text-right">
                           <div className="flex justify-end gap-2">
-                            <button onClick={() => handleEdit(log)} className="p-2 text-slate-400 dark:text-zinc-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"><Plus className="w-4 h-4" /></button>
-                            <button onClick={() => handleDelete(log.id)} className="p-2 text-slate-400 dark:text-zinc-500 hover:text-red-600 dark:hover:text-red-400 transition-colors"><Trash2 className="w-4 h-4" /></button>
+                            {item.logType === 'Study' && (
+                              <button onClick={() => handleEdit(item as StudyLog)} className="p-2 text-slate-400 dark:text-zinc-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"><Plus className="w-4 h-4" /></button>
+                            )}
+                            <button 
+                              onClick={() => {
+                                if (item.logType === 'Study') handleDelete(item.id);
+                                else {
+                                  // Add reading log delete if needed, for now just placeholder
+                                  if (window.confirm('Delete this reading log?')) {
+                                    deleteDoc(doc(db, 'users', user!.uid, 'readingLogs', item.id));
+                                  }
+                                }
+                              }} 
+                              className="p-2 text-slate-400 dark:text-zinc-500 hover:text-red-600 dark:hover:text-red-400 transition-colors"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
                           </div>
                         </td>
                       </tr>
@@ -1389,6 +1568,21 @@ function AppContent() {
           {activeTab === 'timer' && (
             <div className="max-w-4xl mx-auto">
               <TimerCard logs={logs} />
+            </div>
+          )}
+
+          {activeTab === 'reading' && (
+            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <div className="flex items-center gap-3 mb-8">
+                <div className="w-12 h-12 bg-indigo-100 dark:bg-indigo-900/30 rounded-2xl flex items-center justify-center">
+                  <Gauge className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
+                </div>
+                <div>
+                  <h1 className="text-3xl font-bold dark:text-white">Reading Velocity Engine</h1>
+                  <p className="text-slate-500 dark:text-zinc-400">VARC Module • Accelerated Comprehension & Processing</p>
+                </div>
+              </div>
+              <ReadingVelocityEngine userId={user.uid} />
             </div>
           )}
 

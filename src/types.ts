@@ -40,3 +40,18 @@ export interface TimerSettings {
   mockTime: number;
   mockSplitTime: number;
 }
+
+export interface ReadingLog {
+  id: string;
+  userId: string;
+  title: string;
+  excerpt: string;
+  wordCount: number;
+  duration: number; // seconds
+  wpm: number;
+  gradeLevel: number;
+  comprehensionSummary: string;
+  domain: string;
+  date: Date;
+  createdAt: Date;
+}

@@ -54,6 +54,21 @@ service cloud.firestore {
              (settingId == 'goals' && data.keys().hasAll(['daily', 'weekly']) && data.daily is number && data.weekly is number);
     }
 
+    function isValidReadingLog(data) {
+      return data.keys().hasAll(['userId', 'title', 'excerpt', 'wordCount', 'duration', 'wpm', 'gradeLevel', 'comprehensionSummary', 'domain', 'date', 'createdAt']) &&
+             data.userId is string &&
+             data.title is string && data.title.size() <= 200 &&
+             data.excerpt is string && data.excerpt.size() <= 50000 &&
+             data.wordCount is number &&
+             data.duration is number &&
+             data.wpm is number &&
+             data.gradeLevel is number &&
+             data.comprehensionSummary is string && data.comprehensionSummary.size() <= 2000 &&
+             data.domain is string &&
+             data.date is timestamp &&
+             data.createdAt is timestamp;
+    }
+
     // ===============================================================
     // Rules
     // ===============================================================
@@ -79,6 +94,12 @@ service cloud.firestore {
         allow read: if isOwner(userId);
         allow create, update: if isOwner(userId) && isValidSettings(request.resource.data, settingId);
         allow delete: if isOwner(userId);
+      }
+
+      // Reading logs
+      match /readingLogs/{logId} {
+        allow read, delete: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidReadingLog(request.resource.data);
       }
     }
   }
