@@ -25,7 +25,7 @@ import { TimerCard } from './components/TimerCard';
 import { ReadingVelocityEngine } from './components/ReadingVelocityEngine';
 import { StudyLog, ReadingLog } from './types';
 
-const DOMAINS = ['Philosophy', 'Economics', 'Sociology', 'Science', 'Literature', 'History', 'Technology'];
+const DOMAINS = ['Philosophy', 'Economics', 'Sociology', 'Science', 'Literature', 'History', 'Technology', 'Other'];
 
 // Theme Types
 type Theme = 'light' | 'dark' | 'system';
@@ -1210,6 +1210,7 @@ function AppContent() {
                         <Line type="monotone" dataKey="Economics" name="Economics" stroke="#f59e0b" strokeWidth={1} dot={false} connectNulls />
                         <Line type="monotone" dataKey="Sociology" name="Sociology" stroke="#10b981" strokeWidth={1} dot={false} connectNulls />
                         <Line type="monotone" dataKey="Technology" name="Technology" stroke="#3b82f6" strokeWidth={1} dot={false} connectNulls />
+                        <Line type="monotone" dataKey="Other" name="Other" stroke="#64748b" strokeWidth={1} dot={false} connectNulls />
                         <Line type="monotone" dataKey="target" name="Target Trajectory" stroke="#94a3b8" strokeDasharray="5 5" dot={false} />
                       </LineChart>
                     </ResponsiveContainer>
