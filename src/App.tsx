@@ -18,7 +18,7 @@ import { twMerge } from 'tailwind-merge';
 
 import { 
   auth, db, googleProvider, signInWithPopup, signOut, onAuthStateChanged, User,
-  collection, doc, addDoc, deleteDoc, query, where, orderBy, onSnapshot, Timestamp, setDoc, getDoc, writeBatch
+  collection, doc, addDoc, updateDoc, deleteDoc, query, where, orderBy, onSnapshot, Timestamp, setDoc, getDoc, writeBatch
 } from './firebase';
 
 import { TimerCard } from './components/TimerCard';
@@ -262,11 +262,17 @@ function AppContent() {
   const [categories, setCategories] = useState<string[]>(DEFAULT_CATEGORIES);
   const [goals, setGoals] = useState<UserGoals>({ daily: 120, weekly: 840 });
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [deleteConfirmType, setDeleteConfirmType] = useState<'Study' | 'Reading' | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'log' | 'history' | 'timer' | 'reading' | 'settings'>('dashboard');
   
   // Editing state
   const [editingLogId, setEditingLogId] = useState<string | null>(null);
+  const [editingReadingLog, setEditingReadingLog] = useState<ReadingLog | null>(null);
+  const [editRDomain, setEditRDomain] = useState('');
+  const [editRSummary, setEditRSummary] = useState('');
+  const [editRTitle, setEditRTitle] = useState('');
+  
   const [showGoalModal, setShowGoalModal] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
@@ -526,17 +532,43 @@ function AppContent() {
     setActiveTab('log');
   };
 
-  const handleDelete = (id: string) => {
+  const handleEditReading = (log: ReadingLog) => {
+    setEditingReadingLog(log);
+    setEditRDomain(log.domain);
+    setEditRSummary(log.comprehensionSummary);
+    setEditRTitle(log.title || 'Untitled Excerpt');
+  };
+
+  const updateReadingLog = async () => {
+    if (!user || !editingReadingLog) return;
+    try {
+      await updateDoc(doc(db, 'users', user.uid, 'readingLogs', editingReadingLog.id), {
+        domain: editRDomain,
+        comprehensionSummary: editRSummary,
+        title: editRTitle,
+        updatedAt: Timestamp.now()
+      });
+      setEditingReadingLog(null);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `users/${user.uid}/readingLogs/${editingReadingLog.id}`);
+    }
+  };
+
+  const handleDelete = (id: string, type: 'Study' | 'Reading' = 'Study') => {
     setDeleteConfirmId(id);
+    setDeleteConfirmType(type);
   };
 
   const confirmDelete = async () => {
-    if (!user || !deleteConfirmId) return;
+    if (!user || !deleteConfirmId || !deleteConfirmType) return;
     const id = deleteConfirmId;
-    const path = `users/${user.uid}/logs/${id}`;
+    const type = deleteConfirmType;
+    const collectionName = type === 'Study' ? 'logs' : 'readingLogs';
+    const path = `users/${user.uid}/${collectionName}/${id}`;
     try {
-      await deleteDoc(doc(db, 'users', user.uid, 'logs', id));
+      await deleteDoc(doc(db, 'users', user.uid, collectionName, id));
       setDeleteConfirmId(null);
+      setDeleteConfirmType(null);
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, path);
     }
@@ -1539,19 +1571,13 @@ function AppContent() {
                         </td>
                         <td className="px-6 py-4 text-right">
                           <div className="flex justify-end gap-2">
-                            {item.logType === 'Study' && (
+                            {item.logType === 'Study' ? (
                               <button onClick={() => handleEdit(item as StudyLog)} className="p-2 text-slate-400 dark:text-zinc-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"><Plus className="w-4 h-4" /></button>
+                            ) : (
+                              <button onClick={() => handleEditReading(item as any as ReadingLog)} className="p-2 text-slate-400 dark:text-zinc-500 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors"><Plus className="w-4 h-4" /></button>
                             )}
                             <button 
-                              onClick={() => {
-                                if (item.logType === 'Study') handleDelete(item.id);
-                                else {
-                                  // Add reading log delete if needed, for now just placeholder
-                                  if (window.confirm('Delete this reading log?')) {
-                                    deleteDoc(doc(db, 'users', user!.uid, 'readingLogs', item.id));
-                                  }
-                                }
-                              }} 
+                              onClick={() => handleDelete(item.id, item.logType)} 
                               className="p-2 text-slate-400 dark:text-zinc-500 hover:text-red-600 dark:hover:text-red-400 transition-colors"
                             >
                               <Trash2 className="w-4 h-4" />
@@ -1743,11 +1769,14 @@ function AppContent() {
       {deleteConfirmId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 dark:bg-black/70 backdrop-blur-sm">
           <div className="bg-white dark:bg-zinc-900 rounded-3xl p-8 max-w-sm w-full shadow-2xl border border-slate-100 dark:border-zinc-800">
-            <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">Delete Log?</h3>
-            <p className="text-slate-500 dark:text-zinc-400 mb-8">This action cannot be undone. Are you sure you want to delete this study log?</p>
+            <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">Delete {deleteConfirmType} Log?</h3>
+            <p className="text-slate-500 dark:text-zinc-400 mb-8">This action cannot be undone. Are you sure you want to delete this {deleteConfirmType?.toLowerCase()} log?</p>
             <div className="flex gap-4">
               <button 
-                onClick={() => setDeleteConfirmId(null)}
+                onClick={() => {
+                  setDeleteConfirmId(null);
+                  setDeleteConfirmType(null);
+                }}
                 className="flex-1 py-3 bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-400 font-bold rounded-2xl hover:bg-slate-200 dark:hover:bg-zinc-700 transition-colors"
               >
                 Cancel
@@ -1758,6 +1787,63 @@ function AppContent() {
               >
                 Delete
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reading Log Edit Modal */}
+      {editingReadingLog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 dark:bg-black/70 backdrop-blur-sm">
+          <div className="bg-white dark:bg-zinc-900 rounded-3xl p-8 max-w-lg w-full shadow-2xl border border-slate-100 dark:border-zinc-800 animate-in zoom-in-95 duration-200">
+            <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-6">Edit Reading Log</h3>
+            
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700 dark:text-zinc-300">Title</label>
+                <input 
+                  type="text" 
+                  value={editRTitle} 
+                  onChange={(e) => setEditRTitle(e.target.value)}
+                  className="w-full p-3 bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700 dark:text-zinc-300">Domain</label>
+                <select 
+                  value={editRDomain} 
+                  onChange={(e) => setEditRDomain(e.target.value)}
+                  className="w-full p-3 bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white"
+                >
+                  {DOMAINS.map(d => <option key={d} value={d}>{d}</option>)}
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700 dark:text-zinc-300">Synthetic Summary</label>
+                <textarea 
+                  value={editRSummary} 
+                  onChange={(e) => setEditRSummary(e.target.value)}
+                  rows={4}
+                  className="w-full p-3 bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white"
+                />
+              </div>
+
+              <div className="flex gap-4 pt-4">
+                <button 
+                  onClick={() => setEditingReadingLog(null)}
+                  className="flex-1 py-3 bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-400 font-bold rounded-2xl hover:bg-slate-200 dark:hover:bg-zinc-700 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={updateReadingLog}
+                  className="flex-[2] py-3 bg-emerald-600 text-white font-bold rounded-2xl hover:bg-emerald-700 transition-colors shadow-lg shadow-emerald-200 dark:shadow-none"
+                >
+                  Update Log
+                </button>
+              </div>
             </div>
           </div>
         </div>
