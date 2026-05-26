@@ -55,3 +55,16 @@ export interface ReadingLog {
   date: Date;
   createdAt: Date;
 }
+
+export interface DailyTask {
+  id: string;
+  userId: string;
+  date: string; // YYYY-MM-DD
+  title: string;
+  category: string;
+  is_frog: boolean;
+  status: 'pending' | 'done';
+  estimatedDuration: number; // in minutes
+  proofOfWork?: string;
+  createdAt: Date;
+}

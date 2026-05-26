@@ -10,7 +10,7 @@ import {
   Calendar, Clock, BookOpen, BarChart3, History, Download, 
   Plus, Trash2, LogOut, LayoutDashboard, ChevronLeft, ChevronRight,
   Target, Award, TrendingUp, Settings as SettingsIcon, Save, RotateCcw, X, Star, AlertTriangle, Maximize2,
-  Sun, Moon, Monitor, Menu, FileJson, Upload, FileUp, Gauge
+  Sun, Moon, Monitor, Menu, FileJson, Upload, FileUp, Gauge, ListTodo, CheckCircle2, Circle, Play
 } from 'lucide-react';
 import { format, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay, subDays, startOfMonth, endOfMonth, subMonths, parseISO, isWithinInterval, addHours } from 'date-fns';
 import { clsx, type ClassValue } from 'clsx';
@@ -23,7 +23,8 @@ import {
 
 import { TimerCard } from './components/TimerCard';
 import { ReadingVelocityEngine } from './components/ReadingVelocityEngine';
-import { StudyLog, ReadingLog } from './types';
+import { ActionPlanView } from './components/ActionPlanView';
+import { StudyLog, ReadingLog, DailyTask } from './types';
 
 const DOMAINS = ['Philosophy', 'Economics', 'Sociology', 'Science', 'Literature', 'History', 'Technology', 'Other'];
 
@@ -264,8 +265,13 @@ function AppContent() {
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deleteConfirmType, setDeleteConfirmType] = useState<'Study' | 'Reading' | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'log' | 'history' | 'timer' | 'reading' | 'settings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'log' | 'history' | 'timer' | 'reading' | 'settings' | 'action-plan'>('dashboard');
   
+  // Daily Tasks and State Handoff
+  const [dailyTasks, setDailyTasks] = useState<DailyTask[]>([]);
+  const [timerPrefilledCategory, setTimerPrefilledCategory] = useState<string | undefined>(undefined);
+  const [timerPrefilledNotes, setTimerPrefilledNotes] = useState<string | undefined>(undefined);
+
   // Editing state
   const [editingLogId, setEditingLogId] = useState<string | null>(null);
   const [editingReadingLog, setEditingReadingLog] = useState<ReadingLog | null>(null);
@@ -366,6 +372,49 @@ function AppContent() {
 
     return () => unsubscribe();
   }, [user]);
+
+  // Real-time daily tasks subscription
+  useEffect(() => {
+    if (!user) {
+      setDailyTasks([]);
+      return;
+    }
+
+    const q = query(
+      collection(db, 'users', user.uid, 'dailyTasks'),
+      orderBy('createdAt', 'asc')
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const newTasks = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          createdAt: data.createdAt?.toDate() || new Date()
+        } as unknown as DailyTask;
+      });
+      setDailyTasks(newTasks);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, `users/${user.uid}/dailyTasks`);
+    });
+
+    return () => unsubscribe();
+  }, [user]);
+
+  // Nightly Auto-Purge: wipe/delete pending tasks from previous days
+  useEffect(() => {
+    if (!user || dailyTasks.length === 0) return;
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    const oldPendingTasks = dailyTasks.filter(t => t.date < todayStr && t.status === 'pending');
+    if (oldPendingTasks.length > 0) {
+      oldPendingTasks.forEach(task => {
+        deleteDoc(doc(db, 'users', user.uid, 'dailyTasks', task.id)).catch(err => {
+          console.error("Failed to auto-purge pending task:", err);
+        });
+      });
+    }
+  }, [user, dailyTasks]);
 
   useEffect(() => {
     if (!user) return;
@@ -552,6 +601,12 @@ function AppContent() {
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `users/${user.uid}/readingLogs/${editingReadingLog.id}`);
     }
+  };
+
+  const handlePlayTask = (task: DailyTask) => {
+    setTimerPrefilledCategory(task.category);
+    setTimerPrefilledNotes(task.title);
+    setActiveTab('timer');
   };
 
   const handleDelete = (id: string, type: 'Study' | 'Reading' = 'Study') => {
@@ -1054,6 +1109,16 @@ function AppContent() {
           >
             <Gauge className="w-5 h-5" />
             Active Reading (RVE)
+          </button>
+          <button
+            onClick={() => setActiveTab('action-plan')}
+            className={cn(
+              "w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors",
+              activeTab === 'action-plan' ? "bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400" : "text-slate-600 dark:text-zinc-400 hover:bg-slate-50 dark:hover:bg-zinc-800"
+            )}
+          >
+            <ListTodo className="w-5 h-5" />
+            Action Plan
           </button>
           <button
             onClick={() => setActiveTab('settings')}
@@ -1594,7 +1659,15 @@ function AppContent() {
 
           {activeTab === 'timer' && (
             <div className="max-w-4xl mx-auto">
-              <TimerCard logs={logs} />
+              <TimerCard 
+                logs={logs} 
+                prefilledCategory={timerPrefilledCategory}
+                prefilledNotes={timerPrefilledNotes}
+                onPrefillClear={() => {
+                  setTimerPrefilledCategory(undefined);
+                  setTimerPrefilledNotes(undefined);
+                }}
+              />
             </div>
           )}
 
@@ -1609,7 +1682,80 @@ function AppContent() {
                   <p className="text-slate-500 dark:text-zinc-400">VARC Module • Accelerated Comprehension & Processing</p>
                 </div>
               </div>
-              <ReadingVelocityEngine userId={user.uid} />
+               <ReadingVelocityEngine userId={user.uid} />
+            </div>
+          )}
+
+          {activeTab === 'action-plan' && (
+            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <div className="flex items-center gap-3 mb-8">
+                <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-900/30 rounded-2xl flex items-center justify-center animate-pulse">
+                  <ListTodo className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
+                </div>
+                <div>
+                  <h1 className="text-3xl font-bold dark:text-white">Daily Action Plan</h1>
+                  <p className="text-slate-500 dark:text-zinc-400">Structure today's preparation • Conquer the high-stakes Frog task</p>
+                </div>
+              </div>
+
+              <ActionPlanView 
+                categories={categories}
+                dailyTasks={dailyTasks}
+                onAddTask={async (title, categoryVal, isFrogVal, estimatedDurationVal) => {
+                  if (!user || !title.trim()) return;
+                  const todayStr = format(new Date(), 'yyyy-MM-dd');
+                  const path = `users/${user.uid}/dailyTasks`;
+                  try {
+                    // Limits to 1 frog per day: demote existing if setting a new one
+                    if (isFrogVal) {
+                      const existingFrog = dailyTasks.find(t => t.date === todayStr && t.is_frog);
+                      if (existingFrog) {
+                        await updateDoc(doc(db, 'users', user.uid, 'dailyTasks', existingFrog.id), {
+                          is_frog: false
+                        });
+                      }
+                    }
+
+                    const newTaskRef = doc(collection(db, 'users', user.uid, 'dailyTasks'));
+                    await setDoc(newTaskRef, {
+                      userId: user.uid,
+                      date: todayStr,
+                      title: title.trim(),
+                      category: categoryVal,
+                      is_frog: isFrogVal,
+                      status: 'pending',
+                      estimatedDuration: estimatedDurationVal,
+                      createdAt: Timestamp.now()
+                    });
+                  } catch (error) {
+                    handleFirestoreError(error, OperationType.CREATE, path);
+                  }
+                }}
+                onToggleTask={async (task, proofOfWork) => {
+                  if (!user) return;
+                  const newStatus = task.status === 'pending' ? 'done' : 'pending';
+                  try {
+                    const updateData: any = { status: newStatus };
+                    if (newStatus === 'done' && proofOfWork) {
+                      updateData.proofOfWork = proofOfWork;
+                    } else if (newStatus === 'pending') {
+                      updateData.proofOfWork = '';
+                    }
+                    await updateDoc(doc(db, 'users', user.uid, 'dailyTasks', task.id), updateData);
+                  } catch (error) {
+                    handleFirestoreError(error, OperationType.UPDATE, `users/${user.uid}/dailyTasks/${task.id}`);
+                  }
+                }}
+                onPlayTask={handlePlayTask}
+                onDeleteTask={async (task) => {
+                  if (!user) return;
+                  try {
+                    await deleteDoc(doc(db, 'users', user.uid, 'dailyTasks', task.id));
+                  } catch (error) {
+                    handleFirestoreError(error, OperationType.DELETE, `users/${user.uid}/dailyTasks/${task.id}`);
+                  }
+                }}
+              />
             </div>
           )}
 

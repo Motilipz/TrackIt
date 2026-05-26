@@ -56,7 +56,17 @@ const STRATEGIC_TAGS = [
   "Mental Fatigue"
 ];
 
-export const TimerCard = ({ logs = [] }: { logs?: StudyLog[] }) => {
+export const TimerCard = ({ 
+  logs = [],
+  prefilledCategory,
+  prefilledNotes,
+  onPrefillClear
+}: { 
+  logs?: StudyLog[];
+  prefilledCategory?: string;
+  prefilledNotes?: string;
+  onPrefillClear?: () => void;
+}) => {
   const [initialSettings] = useState<TimerSettings>({
     autoFlow: false,
     strictMode: false,
@@ -73,6 +83,25 @@ export const TimerCard = ({ logs = [] }: { logs?: StudyLog[] }) => {
   const timer = useTimer(initialSettings);
   const [category, setCategory] = useState('QA');
   const [notes, setNotes] = useState('');
+
+  useEffect(() => {
+    if (prefilledCategory) {
+      setCategory(prefilledCategory);
+    }
+  }, [prefilledCategory]);
+
+  useEffect(() => {
+    if (prefilledNotes) {
+      setNotes(prefilledNotes);
+      // Auto-start focus mode if idle
+      if (timer.status === 'idle') {
+        timer.startTimer();
+      }
+      if (onPrefillClear) {
+        onPrefillClear();
+      }
+    }
+  }, [prefilledNotes, onPrefillClear, timer]);
   const [showRatingModal, setShowRatingModal] = useState(false);
   const [showAbandonModal, setShowAbandonModal] = useState(false);
   const [showSettings, setShowSettings] = useState(false);

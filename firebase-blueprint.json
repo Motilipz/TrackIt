@@ -51,6 +51,22 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["userId", "title", "excerpt", "wordCount", "duration", "wpm", "date", "createdAt"]
+    },
+    "DailyTask": {
+      "title": "DailyTask",
+      "description": "A single daily action item/planned task.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "date": { "type": "string", "description": "Date of the task in YYYY-MM-DD format" },
+        "title": { "type": "string" },
+        "category": { "type": "string" },
+        "is_frog": { "type": "boolean" },
+        "status": { "type": "string", "enum": ["pending", "done"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "date", "title", "category", "is_frog", "status", "createdAt"]
     }
   },
   "firestore": {
@@ -65,6 +81,10 @@
     "/users/{userId}/settings/{settingId}": {
       "schema": "UserSettings",
       "description": "User's settings and configurations."
+    },
+    "/users/{userId}/dailyTasks/{taskId}": {
+      "schema": "DailyTask",
+      "description": "User's daily tasks and action items."
     }
   }
 }
