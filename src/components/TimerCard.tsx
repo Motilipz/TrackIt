@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Volume2, VolumeX, Play, Pause, RotateCcw, Save, Settings as SettingsIcon, X, Star, AlertTriangle, Maximize2, SkipForward, Shield, Zap, CloudRain, Trees, Waves, Music, Link, Volume1, Download } from 'lucide-react';
+import { Volume2, VolumeX, Play, Pause, RotateCcw, Save, Settings as SettingsIcon, X, Star, AlertTriangle, Maximize2, SkipForward, Shield, Zap, CloudRain, Trees, Waves, Music, Link, Volume1, Download, Tv } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useTimer } from '../hooks/useTimer';
 import { Session, TimerSettings, StudyLog } from '../types';
@@ -83,6 +83,74 @@ export const TimerCard = ({
   const timer = useTimer(initialSettings);
   const [category, setCategory] = useState('QA');
   const [notes, setNotes] = useState('');
+
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [pipError, setPipError] = useState<string | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+    document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('MSFullscreenChange', handleFullscreenChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isFullscreen) {
+        if (document.fullscreenElement) {
+          const exit = document.exitFullscreen ||
+                       (document as any).webkitExitFullscreen ||
+                       (document as any).mozCancelFullScreen ||
+                       (document as any).msExitFullscreen;
+          if (exit) exit.call(document);
+        } else {
+          setIsFullscreen(false);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isFullscreen]);
+
+  const toggleFullscreen = async () => {
+    if (!containerRef.current) return;
+    try {
+      if (!document.fullscreenElement) {
+        const req = containerRef.current.requestFullscreen ||
+                    (containerRef.current as any).webkitRequestFullscreen ||
+                    (containerRef.current as any).mozRequestFullScreen ||
+                    (containerRef.current as any).msRequestFullscreen;
+        if (req) {
+          await req.call(containerRef.current);
+        } else {
+          setIsFullscreen(true);
+        }
+      } else {
+        const exit = document.exitFullscreen ||
+                     (document as any).webkitExitFullscreen ||
+                     (document as any).mozCancelFullScreen ||
+                     (document as any).msExitFullscreen;
+        if (exit) {
+          await exit.call(document);
+        } else {
+          setIsFullscreen(false);
+        }
+      }
+    } catch (err) {
+      console.error('Fullscreen request failed, falling back to virtual fullscreen', err);
+      setIsFullscreen(!isFullscreen);
+    }
+  };
 
   useEffect(() => {
     if (prefilledCategory) {
@@ -277,9 +345,7 @@ export const TimerCard = ({
     timer.resetTimer();
     setShowAbandonModal(false);
     setAbandonReason('');
-  };
-
-  // Picture in Picture Simulation (Condensed UI)
+  };  // Picture in Picture Real Logic (using canvas capture and animation frame loop)
   const togglePiP = async () => {
     try {
       if (document.pictureInPictureElement) {
@@ -294,38 +360,104 @@ export const TimerCard = ({
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
 
+      const drawFrame = () => {
+        // Custom canvas visual drawing - sophisticated slate dark themed card
+        ctx.fillStyle = '#09090b'; // dark zinc background
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Subtly colored category tag background
+        ctx.fillStyle = '#1e1b4b'; // deep indigo
+        const txt = timer.mode.toUpperCase();
+        ctx.font = 'bold 11px sans-serif';
+        const txtWidth = ctx.measureText(txt).width;
+        ctx.beginPath();
+        const rx = (canvas.width - txtWidth - 16) / 2;
+        const ry = 15;
+        const rw = txtWidth + 16;
+        const rh = 18;
+        if (ctx.roundRect) {
+          ctx.roundRect(rx, ry, rw, rh, 4);
+        } else {
+          ctx.rect(rx, ry, rw, rh);
+        }
+        ctx.fill();
+
+        // category label text
+        ctx.fillStyle = '#818cf8'; // indigo-400
+        ctx.textAlign = 'center';
+        ctx.fillText(txt, canvas.width / 2, 28);
+
+        // Draw timer
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 36px monospace';
+        const timeStr = formatTime(timer.status === 'overtime' ? timer.overtimeSeconds : timer.timeLeft);
+        ctx.fillText(timeStr, canvas.width / 2, 75);
+
+        // Active task session title or state helper
+        ctx.fillStyle = '#a1a1aa'; // zinc-400
+        ctx.font = '12px sans-serif';
+        const sessionLabel = notes || 'FOCUS BLOCK SESSION';
+        const maxLen = 30;
+        const displayLabel = sessionLabel.length > maxLen ? sessionLabel.slice(0, maxLen) + '...' : sessionLabel;
+        ctx.fillText(displayLabel, canvas.width / 2, 110);
+
+        // Circular style indicator/progress line at bottom
+        ctx.fillStyle = timer.mode === 'focus' ? '#4f46e5' : '#10b981'; // interactive accent color
+        ctx.fillRect(0, canvas.height - 4, canvas.width, 4);
+      };
+
+      // Draw the first frame BEFORE capture to populate visual stream tracks immediately
+      drawFrame();
+
       const video = document.createElement('video');
       video.muted = true;
-      video.srcObject = canvas.captureStream();
-      
-      // Wait for metadata to load before requesting PiP
-      await new Promise((resolve) => {
-        video.onloadedmetadata = resolve;
-      });
+      video.playsInline = true;
 
+      // 10 FPS is perfect for digital timers and low resource consumption
+      const captureRate = 10;
+      const stream = (canvas as any).captureStream ? (canvas as any).captureStream(captureRate) : (canvas as any).webkitCaptureStream(captureRate);
+      video.srcObject = stream;
+
+      // Ensure offscreen rendering
+      video.style.position = 'fixed';
+      video.style.top = '-9999px';
+      video.style.left = '-9999px';
+      video.style.opacity = '0';
+      video.style.pointerEvents = 'none';
+      video.style.width = '1px';
+      video.style.height = '1px';
+      document.body.appendChild(video);
+
+      // Trigger standard video play synchronously to preserve user gesture chain
       await video.play();
 
+      let isPiPRunning = true;
+      video.addEventListener('leavepictureinpicture', () => {
+        isPiPRunning = false;
+        video.remove();
+      });
+
       const updateCanvas = () => {
-        ctx.fillStyle = '#09090b';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 48px monospace';
-        ctx.textAlign = 'center';
-        const timeStr = formatTime(timer.status === 'overtime' ? timer.overtimeSeconds : timer.timeLeft);
-        ctx.fillText(timeStr, canvas.width / 2, canvas.height / 2 + 15);
-        
-        ctx.font = '16px sans-serif';
-        ctx.fillText(timer.mode.toUpperCase(), canvas.width / 2, 40);
-        
-        if (video.srcObject && document.pictureInPictureElement === video) {
-          requestAnimationFrame(updateCanvas);
-        }
+        if (!isPiPRunning) return;
+        drawFrame();
+        requestAnimationFrame(updateCanvas);
       };
-      
-      updateCanvas();
+
+      // Request Picture in Picture
       await video.requestPictureInPicture();
-    } catch (err) {
+      updateCanvas();
+    } catch (err: any) {
       console.error('PiP failed', err);
+      if (err?.name === 'SecurityError' || err?.name === 'NotAllowedError' || String(err).includes('allow="picture-in-picture"')) {
+        setPipError(
+          "Picture-in-Picture is restricted by browser security inside editor iframes. " +
+          "To enable this floating timer, please open the application in a new tab by clicking the 'Development App URL' or 'Shared App URL' link in your toolbar."
+        );
+      } else {
+        setPipError(
+          "Failed to launch Picture-in-Picture mode: " + (err?.message || err || "Unknown error")
+        );
+      }
     }
   };
 
@@ -445,12 +577,19 @@ export const TimerCard = ({
         {/* Main Timer Card */}
         <div className="lg:col-span-2 space-y-6">
           <motion.div 
+            ref={containerRef}
             layout
-            className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-3xl p-8 shadow-2xl relative overflow-hidden flex flex-col items-center"
+            className={cn(
+              "relative overflow-hidden flex flex-col items-center justify-center transition-all duration-300",
+              isFullscreen 
+                ? "bg-zinc-950 dark:bg-zinc-950 text-white w-screen h-screen fixed inset-0 z-[9999] p-12 rounded-none border-none flex flex-col items-center justify-center" 
+                : "bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-3xl p-8 shadow-2xl"
+            )}
           >
             {/* Background Glow */}
             <div className={cn(
-              "absolute -top-24 -right-24 w-64 h-64 rounded-full blur-[100px] opacity-20 transition-colors duration-1000",
+              "absolute rounded-full blur-[100px] opacity-20 transition-all duration-1000",
+              isFullscreen ? "-top-48 -right-48 w-96 h-96 blur-[150px]" : "-top-24 -right-24 w-64 h-64",
               timer.mode === 'focus' ? "bg-indigo-500" : 
               timer.mode === 'break' ? "bg-emerald-500" : 
               timer.mode === 'long-break' ? "bg-blue-500" : "bg-purple-500"
@@ -547,7 +686,10 @@ export const TimerCard = ({
             </div>
 
             {/* Timer Display with Progress Ring */}
-            <div className="relative flex items-center justify-center mb-12">
+            <div className={cn(
+              "relative flex items-center justify-center transition-all duration-300",
+              isFullscreen ? "mb-16 scale-110 md:scale-125 lg:scale-135" : "mb-12"
+            )}>
               <svg className="w-64 h-64 md:w-80 md:h-80 -rotate-90 transform">
                 <circle
                   cx="50%"
@@ -762,6 +904,14 @@ export const TimerCard = ({
                 onClick={togglePiP}
                 className="p-4 bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 rounded-2xl transition-all dark:text-white hidden md:block"
                 title="Picture in Picture"
+              >
+                <Tv size={24} />
+              </button>
+
+              <button 
+                onClick={toggleFullscreen}
+                className="p-4 bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 rounded-2xl transition-all dark:text-white"
+                title="Toggle Fullscreen"
               >
                 <Maximize2 size={24} />
               </button>
@@ -1044,6 +1194,31 @@ export const TimerCard = ({
                   ABANDON
                 </button>
               </div>
+            </motion.div>
+          </div>
+        )}
+
+        {pipError && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/50 dark:bg-black/80 backdrop-blur-sm">
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-3xl p-8 max-w-md w-full shadow-2xl"
+            >
+              <div className="flex items-center gap-3 text-indigo-500 mb-4">
+                <AlertTriangle size={24} />
+                <h2 className="text-xl font-bold dark:text-white text-slate-800">Picture in Picture Guide</h2>
+              </div>
+              <p className="text-slate-600 dark:text-zinc-400 text-sm mb-6 leading-relaxed">
+                {pipError}
+              </p>
+              
+              <button 
+                onClick={() => setPipError(null)}
+                className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold transition-all"
+              >
+                GOT IT
+              </button>
             </motion.div>
           </div>
         )}
