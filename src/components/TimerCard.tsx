@@ -84,6 +84,24 @@ export const TimerCard = ({
   const [category, setCategory] = useState('QA');
   const [notes, setNotes] = useState('');
 
+  const timerStateRef = useRef({
+    timeLeft: timer.timeLeft,
+    mode: timer.mode,
+    status: timer.status,
+    overtimeSeconds: timer.overtimeSeconds,
+    notes: notes,
+  });
+
+  useEffect(() => {
+    timerStateRef.current = {
+      timeLeft: timer.timeLeft,
+      mode: timer.mode,
+      status: timer.status,
+      overtimeSeconds: timer.overtimeSeconds,
+      notes: notes,
+    };
+  });
+
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [pipError, setPipError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -361,13 +379,15 @@ export const TimerCard = ({
       if (!ctx) return;
 
       const drawFrame = () => {
+        const { timeLeft, mode, status, overtimeSeconds, notes: currentNotes } = timerStateRef.current;
+
         // Custom canvas visual drawing - sophisticated slate dark themed card
         ctx.fillStyle = '#09090b'; // dark zinc background
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
         // Subtly colored category tag background
         ctx.fillStyle = '#1e1b4b'; // deep indigo
-        const txt = timer.mode.toUpperCase();
+        const txt = mode.toUpperCase();
         ctx.font = 'bold 11px sans-serif';
         const txtWidth = ctx.measureText(txt).width;
         ctx.beginPath();
@@ -390,19 +410,19 @@ export const TimerCard = ({
         // Draw timer
         ctx.fillStyle = '#ffffff';
         ctx.font = 'bold 36px monospace';
-        const timeStr = formatTime(timer.status === 'overtime' ? timer.overtimeSeconds : timer.timeLeft);
+        const timeStr = formatTime(status === 'overtime' ? overtimeSeconds : timeLeft);
         ctx.fillText(timeStr, canvas.width / 2, 75);
 
         // Active task session title or state helper
         ctx.fillStyle = '#a1a1aa'; // zinc-400
         ctx.font = '12px sans-serif';
-        const sessionLabel = notes || 'FOCUS BLOCK SESSION';
+        const sessionLabel = currentNotes || 'FOCUS BLOCK SESSION';
         const maxLen = 30;
         const displayLabel = sessionLabel.length > maxLen ? sessionLabel.slice(0, maxLen) + '...' : sessionLabel;
         ctx.fillText(displayLabel, canvas.width / 2, 110);
 
         // Circular style indicator/progress line at bottom
-        ctx.fillStyle = timer.mode === 'focus' ? '#4f46e5' : '#10b981'; // interactive accent color
+        ctx.fillStyle = mode === 'focus' ? '#4f46e5' : '#10b981'; // interactive accent color
         ctx.fillRect(0, canvas.height - 4, canvas.width, 4);
       };
 
