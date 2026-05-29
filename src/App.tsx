@@ -281,6 +281,9 @@ function AppContent() {
   
   const [showGoalModal, setShowGoalModal] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isZenReadingMode, setIsZenReadingMode] = useState(false);
+
+  const isSidebarCompact = isZenReadingMode && activeTab === 'reading';
 
   // Close sidebar on tab change for mobile
   useEffect(() => {
@@ -1041,132 +1044,171 @@ function AppContent() {
 
       {/* Sidebar */}
       <aside className={cn(
-        "fixed inset-y-0 left-0 w-72 bg-white dark:bg-zinc-900 border-r border-slate-200 dark:border-zinc-800 flex flex-col z-[60] transition-transform duration-300 transform lg:translate-x-0 lg:static lg:inset-auto",
+        "fixed inset-y-0 left-0 bg-white dark:bg-zinc-900 border-r border-slate-200 dark:border-zinc-800 flex flex-col z-[60] transition-all duration-300 transform lg:translate-x-0 lg:static lg:inset-auto",
+        isSidebarCompact ? "w-72 lg:w-20" : "w-72",
         isSidebarOpen ? "translate-x-0" : "-translate-x-full"
       )}>
-        <div className="p-6 flex items-center justify-between border-b border-slate-100 dark:border-zinc-800">
+        <div className={cn(
+          "p-6 flex items-center border-b border-slate-100 dark:border-zinc-800 transition-all duration-300",
+          isSidebarCompact ? "justify-center" : "justify-between"
+        )}>
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center">
+            <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shrink-0">
               <Target className="w-6 h-6 text-white" />
             </div>
-            <span className="font-bold text-xl text-slate-900 dark:text-white">CAT Tracker</span>
+            {!isSidebarCompact && (
+              <span className="font-bold text-xl text-slate-900 dark:text-white truncate">CAT Tracker</span>
+            )}
           </div>
-          <button 
-            onClick={() => setIsSidebarOpen(false)}
-            className="lg:hidden p-2 hover:bg-slate-50 dark:hover:bg-zinc-800 rounded-lg transition-colors text-slate-400"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          {!isSidebarCompact && (
+            <button 
+              onClick={() => setIsSidebarOpen(false)}
+              className="lg:hidden p-2 hover:bg-slate-50 dark:hover:bg-zinc-800 rounded-lg transition-colors text-slate-400"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          )}
         </div>
 
-        <nav className="flex-1 p-4 space-y-2">
+        <nav className={cn("flex-1 p-4 space-y-2", isSidebarCompact ? "flex flex-col items-center" : "")}>
           <button
             onClick={() => setActiveTab('dashboard')}
             className={cn(
-              "w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors",
+              "w-full flex items-center rounded-xl font-medium transition-all duration-200",
+              isSidebarCompact ? "justify-center p-3" : "gap-3 px-4 py-3",
               activeTab === 'dashboard' ? "bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400" : "text-slate-600 dark:text-zinc-400 hover:bg-slate-50 dark:hover:bg-zinc-800"
             )}
+            title={isSidebarCompact ? "Dashboard" : undefined}
           >
-            <LayoutDashboard className="w-5 h-5" />
-            Dashboard
+            <LayoutDashboard className="w-5 h-5 shrink-0" />
+            {!isSidebarCompact && <span className="truncate">Dashboard</span>}
           </button>
           <button
             onClick={() => setActiveTab('log')}
             className={cn(
-              "w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors",
+              "w-full flex items-center rounded-xl font-medium transition-all duration-200",
+              isSidebarCompact ? "justify-center p-3" : "gap-3 px-4 py-3",
               activeTab === 'log' ? "bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400" : "text-slate-600 dark:text-zinc-400 hover:bg-slate-50 dark:hover:bg-zinc-800"
             )}
+            title={isSidebarCompact ? "Log Study Time" : undefined}
           >
-            <Plus className="w-5 h-5" />
-            Log Study Time
+            <Plus className="w-5 h-5 shrink-0" />
+            {!isSidebarCompact && <span className="truncate">Log Study Time</span>}
           </button>
           <button
             onClick={() => setActiveTab('history')}
             className={cn(
-              "w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors",
+              "w-full flex items-center rounded-xl font-medium transition-all duration-200",
+              isSidebarCompact ? "justify-center p-3" : "gap-3 px-4 py-3",
               activeTab === 'history' ? "bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400" : "text-slate-600 dark:text-zinc-400 hover:bg-slate-50 dark:hover:bg-zinc-800"
             )}
+            title={isSidebarCompact ? "History" : undefined}
           >
-            <History className="w-5 h-5" />
-            History
+            <History className="w-5 h-5 shrink-0" />
+            {!isSidebarCompact && <span className="truncate">History</span>}
           </button>
           <button
             onClick={() => setActiveTab('timer')}
             className={cn(
-              "w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors",
+              "w-full flex items-center rounded-xl font-medium transition-all duration-200",
+              isSidebarCompact ? "justify-center p-3" : "gap-3 px-4 py-3",
               activeTab === 'timer' ? "bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400" : "text-slate-600 dark:text-zinc-400 hover:bg-slate-50 dark:hover:bg-zinc-800"
             )}
+            title={isSidebarCompact ? "Timer Mode" : undefined}
           >
-            <Clock className="w-5 h-5" />
-            Timer Mode
+            <Clock className="w-5 h-5 shrink-0" />
+            {!isSidebarCompact && <span className="truncate">Timer Mode</span>}
           </button>
           <button
             onClick={() => setActiveTab('reading')}
             className={cn(
-              "w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors",
+              "w-full flex items-center rounded-xl font-medium transition-all duration-200",
+              isSidebarCompact ? "justify-center p-3" : "gap-3 px-4 py-3",
               activeTab === 'reading' ? "bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400" : "text-slate-600 dark:text-zinc-400 hover:bg-slate-50 dark:hover:bg-zinc-800"
             )}
+            title={isSidebarCompact ? "Active Reading (RVE)" : undefined}
           >
-            <Gauge className="w-5 h-5" />
-            Active Reading (RVE)
+            <Gauge className="w-5 h-5 shrink-0" />
+            {!isSidebarCompact && <span className="truncate">Active Reading (RVE)</span>}
           </button>
           <button
             onClick={() => setActiveTab('action-plan')}
             className={cn(
-              "w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors",
+              "w-full flex items-center rounded-xl font-medium transition-all duration-200",
+              isSidebarCompact ? "justify-center p-3" : "gap-3 px-4 py-3",
               activeTab === 'action-plan' ? "bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400" : "text-slate-600 dark:text-zinc-400 hover:bg-slate-50 dark:hover:bg-zinc-800"
             )}
+            title={isSidebarCompact ? "Action Plan" : undefined}
           >
-            <ListTodo className="w-5 h-5" />
-            Action Plan
+            <ListTodo className="w-5 h-5 shrink-0" />
+            {!isSidebarCompact && <span className="truncate">Action Plan</span>}
           </button>
           <button
             onClick={() => setActiveTab('settings')}
             className={cn(
-              "w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors",
+              "w-full flex items-center rounded-xl font-medium transition-all duration-200",
+              isSidebarCompact ? "justify-center p-3" : "gap-3 px-4 py-3",
               activeTab === 'settings' ? "bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400" : "text-slate-600 dark:text-zinc-400 hover:bg-slate-50 dark:hover:bg-zinc-800"
             )}
+            title={isSidebarCompact ? "Goals & Settings" : undefined}
           >
-            <SettingsIcon className="w-5 h-5" />
-            Goals & Settings
+            <SettingsIcon className="w-5 h-5 shrink-0" />
+            {!isSidebarCompact && <span className="truncate">Goals & Settings</span>}
           </button>
         </nav>
 
-        <div className="p-4 mt-auto">
-          <div className="bg-slate-50 dark:bg-zinc-800/50 rounded-2xl p-4 border border-slate-100 dark:border-zinc-800">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
-              <span className="text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-tighter">Live Sync Active</span>
+        {!isSidebarCompact && (
+          <div className="p-4 mt-auto">
+            <div className="bg-slate-50 dark:bg-zinc-800/50 rounded-2xl p-4 border border-slate-100 dark:border-zinc-800">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
+                <span className="text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-tighter">Live Sync Active</span>
+              </div>
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-2 h-2 bg-amber-500 rounded-full"></div>
+                <span className="text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-tighter">{streak} Day Streak</span>
+              </div>
+              <p className="text-[11px] text-slate-500 dark:text-zinc-400 leading-relaxed">Your study data is automatically synchronized across all your devices in real-time.</p>
             </div>
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-2 h-2 bg-amber-500 rounded-full"></div>
-              <span className="text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-tighter">{streak} Day Streak</span>
-            </div>
-            <p className="text-[11px] text-slate-500 dark:text-zinc-400 leading-relaxed">Your study data is automatically synchronized across all your devices in real-time.</p>
           </div>
-        </div>
+        )}
 
-        <div className="p-4 border-t border-slate-100 dark:border-zinc-800">
-          <div className="flex items-center gap-3 px-4 py-3 mb-2">
-            <img src={user.photoURL || ''} alt="" className="w-8 h-8 rounded-full" />
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-slate-900 dark:text-white truncate">{user.displayName}</p>
-              <p className="text-xs text-slate-500 dark:text-zinc-400 truncate">{user.email}</p>
-            </div>
+        <div className={cn(
+          "p-4 border-t border-slate-100 dark:border-zinc-800",
+          isSidebarCompact ? "flex flex-col items-center gap-4 py-6" : ""
+        )}>
+          <div className={cn(
+            "flex items-center mb-2",
+            isSidebarCompact ? "justify-center" : "gap-3 px-4 py-3"
+          )}>
+            <img src={user.photoURL || ''} alt="" className="w-8 h-8 rounded-full shrink-0 border border-slate-200 dark:border-zinc-800" title={user.displayName || ''} />
+            {!isSidebarCompact && (
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-slate-900 dark:text-white truncate">{user.displayName}</p>
+                <p className="text-xs text-slate-500 dark:text-zinc-400 truncate">{user.email}</p>
+              </div>
+            )}
           </div>
           <button
             onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-4 py-2 text-slate-600 dark:text-zinc-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors text-sm font-medium"
+            className={cn(
+              "flex items-center text-slate-600 dark:text-zinc-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors text-sm font-medium",
+              isSidebarCompact ? "justify-center p-3" : "w-full gap-3 px-4 py-2"
+            )}
+            title={isSidebarCompact ? "Sign Out" : undefined}
           >
-            <LogOut className="w-4 h-4" />
-            Sign Out
+            <LogOut className="w-4 h-4 shrink-0" />
+            {!isSidebarCompact && <span className="truncate">Sign Out</span>}
           </button>
         </div>
       </aside>
 
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto p-4 lg:p-8">
-        <div className="max-w-6xl mx-auto">
+        <div className={cn(
+          "mx-auto transition-all duration-300",
+          isSidebarCompact ? "max-w-none w-full px-4 lg:px-12" : "max-w-6xl"
+        )}>
           {activeTab === 'dashboard' && (
             <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
               {/* Header Stats */}
@@ -1673,16 +1715,18 @@ function AppContent() {
 
           {activeTab === 'reading' && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <div className="flex items-center gap-3 mb-8">
-                <div className="w-12 h-12 bg-indigo-100 dark:bg-indigo-900/30 rounded-2xl flex items-center justify-center">
-                  <Gauge className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
+              {!isZenReadingMode && (
+                <div className="flex items-center gap-3 mb-8">
+                  <div className="w-12 h-12 bg-indigo-100 dark:bg-indigo-900/30 rounded-2xl flex items-center justify-center">
+                    <Gauge className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
+                  </div>
+                  <div>
+                    <h1 className="text-3xl font-bold dark:text-white">Reading Velocity Engine</h1>
+                    <p className="text-slate-500 dark:text-zinc-400">VARC Module • Accelerated Comprehension & Processing</p>
+                  </div>
                 </div>
-                <div>
-                  <h1 className="text-3xl font-bold dark:text-white">Reading Velocity Engine</h1>
-                  <p className="text-slate-500 dark:text-zinc-400">VARC Module • Accelerated Comprehension & Processing</p>
-                </div>
-              </div>
-               <ReadingVelocityEngine userId={user.uid} />
+              )}
+              <ReadingVelocityEngine userId={user.uid} onZenModeChange={setIsZenReadingMode} />
             </div>
           )}
 
