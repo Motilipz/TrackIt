@@ -10,7 +10,7 @@ import {
   Calendar, Clock, BookOpen, BarChart3, History, Download, 
   Plus, Trash2, LogOut, LayoutDashboard, ChevronLeft, ChevronRight,
   Target, Award, TrendingUp, Settings as SettingsIcon, Save, RotateCcw, X, Star, AlertTriangle, Maximize2,
-  Sun, Moon, Monitor, Menu, FileJson, Upload, FileUp, Gauge, ListTodo, CheckCircle2, Circle, Play
+  Sun, Moon, Monitor, Menu, FileJson, Upload, FileUp, Gauge, ListTodo, CheckCircle2, Circle, Play, Shield
 } from 'lucide-react';
 import { format, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay, subDays, startOfMonth, endOfMonth, subMonths, parseISO, isWithinInterval, addHours } from 'date-fns';
 import { clsx, type ClassValue } from 'clsx';
@@ -24,6 +24,7 @@ import {
 import { TimerCard } from './components/TimerCard';
 import { ReadingVelocityEngine } from './components/ReadingVelocityEngine';
 import { ActionPlanView } from './components/ActionPlanView';
+import { AccountabilityCockpit } from './components/AccountabilityCockpit';
 import { StudyLog, ReadingLog, DailyTask } from './types';
 
 const DOMAINS = ['Philosophy', 'Economics', 'Sociology', 'Science', 'Literature', 'History', 'Technology', 'Other'];
@@ -265,7 +266,7 @@ function AppContent() {
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deleteConfirmType, setDeleteConfirmType] = useState<'Study' | 'Reading' | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'log' | 'history' | 'timer' | 'reading' | 'settings' | 'action-plan'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'log' | 'history' | 'timer' | 'reading' | 'settings' | 'action-plan' | 'accountability'>('dashboard');
   
   // Daily Tasks and State Handoff
   const [dailyTasks, setDailyTasks] = useState<DailyTask[]>([]);
@@ -405,19 +406,8 @@ function AppContent() {
     return () => unsubscribe();
   }, [user]);
 
-  // Nightly Auto-Purge: wipe/delete pending tasks from previous days
-  useEffect(() => {
-    if (!user || dailyTasks.length === 0) return;
-    const todayStr = format(new Date(), 'yyyy-MM-dd');
-    const oldPendingTasks = dailyTasks.filter(t => t.date < todayStr && t.status === 'pending');
-    if (oldPendingTasks.length > 0) {
-      oldPendingTasks.forEach(task => {
-        deleteDoc(doc(db, 'users', user.uid, 'dailyTasks', task.id)).catch(err => {
-          console.error("Failed to auto-purge pending task:", err);
-        });
-      });
-    }
-  }, [user, dailyTasks]);
+  // Nightly Auto-Purge: We no longer silently delete. Instead, we preserve them for the Reconciliation modal.
+  // This builds a rolling Time Debt ledger and facilitates daily accountability and behavior patching.
 
   useEffect(() => {
     if (!user) return;
@@ -1144,6 +1134,18 @@ function AppContent() {
             {!isSidebarCompact && <span className="truncate">Action Plan</span>}
           </button>
           <button
+            onClick={() => setActiveTab('accountability')}
+            className={cn(
+              "w-full flex items-center rounded-xl font-medium transition-all duration-200",
+              isSidebarCompact ? "justify-center p-3" : "gap-3 px-4 py-3",
+              activeTab === 'accountability' ? "bg-rose-50 dark:bg-red-950/20 text-red-650 dark:text-rose-400 font-bold border-l-2 border-red-500 rounded-l-none" : "text-slate-605 dark:text-zinc-450 hover:bg-slate-50 dark:hover:bg-zinc-800"
+            )}
+            title={isSidebarCompact ? "Accountability Cockpit" : undefined}
+          >
+            <Shield className="w-5 h-5 shrink-0" />
+            {!isSidebarCompact && <span className="truncate">Accountability Cockpit</span>}
+          </button>
+          <button
             onClick={() => setActiveTab('settings')}
             className={cn(
               "w-full flex items-center rounded-xl font-medium transition-all duration-200",
@@ -1769,6 +1771,7 @@ function AppContent() {
                       is_frog: isFrogVal,
                       status: 'pending',
                       estimatedDuration: estimatedDurationVal,
+                      order: dailyTasks.filter(t => t.date === todayStr).length,
                       createdAt: Timestamp.now()
                     });
                   } catch (error) {
@@ -1799,8 +1802,39 @@ function AppContent() {
                     handleFirestoreError(error, OperationType.DELETE, `users/${user.uid}/dailyTasks/${task.id}`);
                   }
                 }}
+                onReorderTasks={async (reorderedTasks) => {
+                  if (!user) return;
+                  try {
+                    const batch = writeBatch(db);
+                    reorderedTasks.forEach((task, idx) => {
+                      batch.update(doc(db, 'users', user.uid, 'dailyTasks', task.id), { order: idx });
+                    });
+                    await batch.commit();
+                  } catch (error) {
+                    console.error("Failed to commit task order batch:", error);
+                  }
+                }}
+                onReconcileTask={async (task, reason) => {
+                  if (!user) return;
+                  try {
+                    await updateDoc(doc(db, 'users', user.uid, 'dailyTasks', task.id), {
+                      status: 'failed',
+                      failureReason: reason
+                    });
+                  } catch (error) {
+                    console.error("Failed to update task reconciliation status:", error);
+                  }
+                }}
               />
             </div>
+          )}
+
+          {activeTab === 'accountability' && (
+            <AccountabilityCockpit
+              user={user}
+              dailyTasks={dailyTasks}
+              logs={logs}
+            />
           )}
 
           {activeTab === 'settings' && (

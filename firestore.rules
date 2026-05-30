@@ -51,7 +51,15 @@ service cloud.firestore {
 
     function isValidSettings(data, settingId) {
       return (settingId == 'categories' && data.keys().hasAll(['list']) && data.list is list && data.list.size() <= 50) ||
-             (settingId == 'goals' && data.keys().hasAll(['daily', 'weekly']) && data.daily is number && data.weekly is number);
+             (settingId == 'goals' && data.keys().hasAll(['daily', 'weekly']) && data.daily is number && data.weekly is number) ||
+             (settingId == 'accountability' && data.keys().hasAll(['stakesEnabled', 'stakesAmount', 'antiCharity', 'boardEmails', 'burnGoalHours', 'examDate', 'restrictionsEnabled', 'restrictedSites']) && 
+              data.stakesEnabled is bool && data.stakesAmount is number && 
+              data.antiCharity is string && data.antiCharity.size() <= 200 &&
+              data.boardEmails is string && data.boardEmails.size() <= 500 &&
+              data.burnGoalHours is number && 
+              data.examDate is string && data.examDate.size() <= 20 &&
+              data.restrictionsEnabled is bool && 
+              data.restrictedSites is string && data.restrictedSites.size() <= 2000);
     }
 
     function isValidReadingLog(data) {
@@ -76,10 +84,23 @@ service cloud.firestore {
              data.title is string && data.title.size() > 0 && data.title.size() <= 200 &&
              data.category is string && data.category.size() > 0 && data.category.size() <= 20 &&
              data.is_frog is bool &&
-             data.status is string && (data.status == 'pending' || data.status == 'done') &&
+             data.status is string && (data.status == 'pending' || data.status == 'done' || data.status == 'failed') &&
              data.estimatedDuration is number &&
              (!('proofOfWork' in data) || (data.proofOfWork is string && data.proofOfWork.size() <= 500)) &&
+             (!('failureReason' in data) || (data.failureReason is string && data.failureReason.size() <= 1000)) &&
+             (!('order' in data) || (data.order is number)) &&
              data.createdAt is timestamp;
+    }
+
+    function isValidProofVault(data) {
+      return data.keys().hasAll(['taskTitle', 'category', 'proofNotes', 'imageFileName', 'fileLink', 'createdAt']) &&
+             data.taskTitle is string && data.taskTitle.size() <= 300 &&
+             data.category is string && data.category.size() <= 100 &&
+             data.proofNotes is string && data.proofNotes.size() <= 2000 &&
+             data.imageFileName is string && data.imageFileName.size() <= 500 &&
+             (!('imageDataUrl' in data) || (data.imageDataUrl is string && data.imageDataUrl.size() <= 1500000)) &&
+             data.fileLink is string && data.fileLink.size() <= 1000 &&
+             data.createdAt is string && data.createdAt.size() <= 100;
     }
 
     // ===============================================================
@@ -119,6 +140,12 @@ service cloud.firestore {
       match /dailyTasks/{taskId} {
         allow read, delete: if isOwner(userId);
         allow create, update: if isOwner(userId) && isValidDailyTask(request.resource.data);
+      }
+
+      // Proof Vault
+      match /proofVault/{proofId} {
+        allow read, delete: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidProofVault(request.resource.data);
       }
     }
   }

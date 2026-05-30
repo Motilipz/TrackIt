@@ -63,8 +63,10 @@ export interface DailyTask {
   title: string;
   category: string;
   is_frog: boolean;
-  status: 'pending' | 'done';
+  status: 'pending' | 'done' | 'failed';
+  failureReason?: 'underestimated_time' | 'burnout' | 'distraction' | 'unexpected_event' | string;
   estimatedDuration: number; // in minutes
   proofOfWork?: string;
+  order?: number;
   createdAt: Date;
 }

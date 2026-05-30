@@ -63,10 +63,44 @@
         "title": { "type": "string" },
         "category": { "type": "string" },
         "is_frog": { "type": "boolean" },
-        "status": { "type": "string", "enum": ["pending", "done"] },
+        "status": { "type": "string", "enum": ["pending", "done", "failed"] },
+        "failureReason": { "type": "string" },
+        "order": { "type": "number" },
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["userId", "date", "title", "category", "is_frog", "status", "createdAt"]
+    },
+    "AccountabilitySettings": {
+      "title": "AccountabilitySettings",
+      "description": "Risk parameters, burn rates, exam date, email targets, and restricted websites.",
+      "type": "object",
+      "properties": {
+        "stakesEnabled": { "type": "boolean" },
+        "stakesAmount": { "type": "number" },
+        "antiCharity": { "type": "string" },
+        "boardEmails": { "type": "string" },
+        "burnGoalHours": { "type": "number" },
+        "examDate": { "type": "string" },
+        "restrictionsEnabled": { "type": "boolean" },
+        "restrictedSites": { "type": "string" }
+      },
+      "required": ["stakesEnabled", "stakesAmount", "antiCharity", "boardEmails", "burnGoalHours", "examDate", "restrictionsEnabled", "restrictedSites"]
+    },
+    "ProofVaultItem": {
+      "title": "ProofVaultItem",
+      "description": "Messy scratchpad image or external sheet logs verifying raw study completion.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "taskTitle": { "type": "string" },
+        "category": { "type": "string" },
+        "proofNotes": { "type": "string" },
+        "imageFileName": { "type": "string" },
+        "imageDataUrl": { "type": "string" },
+        "fileLink": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["taskTitle", "category", "proofNotes", "imageFileName", "fileLink", "createdAt"]
     }
   },
   "firestore": {
@@ -82,9 +116,17 @@
       "schema": "UserSettings",
       "description": "User's settings and configurations."
     },
+    "/users/{userId}/settings/accountability": {
+      "schema": "AccountabilitySettings",
+      "description": "User's high stakes risk parameters."
+    },
     "/users/{userId}/dailyTasks/{taskId}": {
       "schema": "DailyTask",
       "description": "User's daily tasks and action items."
+    },
+    "/users/{userId}/proofVault/{proofId}": {
+      "schema": "ProofVaultItem",
+      "description": "Evidence uploaded of messy scratchpad work."
     }
   }
 }
