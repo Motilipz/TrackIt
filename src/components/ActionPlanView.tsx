@@ -70,11 +70,16 @@ export const ActionPlanView: React.FC<ActionPlanViewProps> = ({
     if (saved) return saved;
     const futureDate = new Date();
     futureDate.setDate(futureDate.getDate() + 14);
-    return format(futureDate, 'yyyy-MM-dd');
+    const formatted = format(futureDate, 'yyyy-MM-dd');
+    localStorage.setItem('simcat_milestone_date', formatted);
+    return formatted;
   });
   
   const [milestoneLabel, setMilestoneLabel] = useState<string>(() => {
-    return localStorage.getItem('simcat_milestone_label') || 'SimCAT';
+    const saved = localStorage.getItem('simcat_milestone_label');
+    if (saved) return saved;
+    localStorage.setItem('simcat_milestone_label', 'SimCAT');
+    return 'SimCAT';
   });
 
   const [isEditingMilestone, setIsEditingMilestone] = useState(false);

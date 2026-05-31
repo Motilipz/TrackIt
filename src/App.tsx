@@ -270,6 +270,7 @@ function AppContent() {
   
   // Daily Tasks and State Handoff
   const [dailyTasks, setDailyTasks] = useState<DailyTask[]>([]);
+  const [linkedTaskId, setLinkedTaskId] = useState<string | null>(null);
   const [timerPrefilledCategory, setTimerPrefilledCategory] = useState<string | undefined>(undefined);
   const [timerPrefilledNotes, setTimerPrefilledNotes] = useState<string | undefined>(undefined);
 
@@ -597,9 +598,24 @@ function AppContent() {
   };
 
   const handlePlayTask = (task: DailyTask) => {
+    setLinkedTaskId(task.id);
     setTimerPrefilledCategory(task.category);
     setTimerPrefilledNotes(task.title);
     setActiveTab('timer');
+  };
+
+  const handleCompleteLinkedTask = async (taskId: string, proofOfWork: string) => {
+    if (!user) return;
+    try {
+      await updateDoc(doc(db, 'users', user.uid, 'dailyTasks', taskId), {
+        status: 'done',
+        proofOfWork: proofOfWork,
+        updatedAt: Timestamp.now()
+      });
+      setLinkedTaskId(null);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `users/${user.uid}/dailyTasks/${taskId}`);
+    }
   };
 
   const handleDelete = (id: string, type: 'Study' | 'Reading' = 'Study') => {
@@ -1711,6 +1727,9 @@ function AppContent() {
                   setTimerPrefilledCategory(undefined);
                   setTimerPrefilledNotes(undefined);
                 }}
+                linkedTaskId={linkedTaskId}
+                onCompleteLinkedTask={handleCompleteLinkedTask}
+                onClearLinkedTaskId={() => setLinkedTaskId(null)}
               />
             </div>
           )}

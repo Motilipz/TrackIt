@@ -60,12 +60,18 @@ export const TimerCard = ({
   logs = [],
   prefilledCategory,
   prefilledNotes,
-  onPrefillClear
+  onPrefillClear,
+  linkedTaskId,
+  onCompleteLinkedTask,
+  onClearLinkedTaskId
 }: { 
   logs?: StudyLog[];
   prefilledCategory?: string;
   prefilledNotes?: string;
   onPrefillClear?: () => void;
+  linkedTaskId?: string | null;
+  onCompleteLinkedTask?: (taskId: string, proofOfWork: string) => Promise<void>;
+  onClearLinkedTaskId?: () => void;
 }) => {
   const [initialSettings] = useState<TimerSettings>({
     autoFlow: false,
@@ -83,6 +89,7 @@ export const TimerCard = ({
   const timer = useTimer(initialSettings);
   const [category, setCategory] = useState('QA');
   const [notes, setNotes] = useState('');
+  const [proofOfWork, setProofOfWork] = useState('');
 
   const timerStateRef = useRef({
     timeLeft: timer.timeLeft,
@@ -101,6 +108,65 @@ export const TimerCard = ({
       notes: notes,
     };
   });
+
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const timerActionsRef = useRef({
+    startTimer: timer.startTimer,
+    pauseTimer: timer.pauseTimer,
+    toggleTimer: timer.toggleTimer,
+  });
+
+  useEffect(() => {
+    timerActionsRef.current = {
+      startTimer: timer.startTimer,
+      pauseTimer: timer.pauseTimer,
+      toggleTimer: timer.toggleTimer,
+    };
+  });
+
+  // Sync PiP video playback state with timer status to correctly update browser controls
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    if (timer.status === 'running' || timer.status === 'overtime') {
+      video.play().catch(err => console.log('PiP video play error:', err));
+      if ('mediaSession' in navigator) {
+        navigator.mediaSession.playbackState = 'playing';
+      }
+    } else {
+      video.pause();
+      if ('mediaSession' in navigator) {
+        navigator.mediaSession.playbackState = 'paused';
+      }
+    }
+  }, [timer.status]);
+
+  // Sync media session action handlers and metadata
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    if ('mediaSession' in navigator) {
+      try {
+        navigator.mediaSession.metadata = new MediaMetadata({
+          title: `${timer.mode.toUpperCase() === 'FOCUS' ? '🎯 Focus Session' : '☕ Break Session'}`,
+          artist: notes || 'CAT Prep Focus Engine',
+          album: `Time Left: ${formatTime(timer.timeLeft)}`,
+        });
+
+        navigator.mediaSession.setActionHandler('play', () => {
+          timerActionsRef.current.startTimer();
+        });
+
+        navigator.mediaSession.setActionHandler('pause', () => {
+          timerActionsRef.current.pauseTimer();
+        });
+      } catch (e) {
+        console.error('Error setting mediaSession metadata:', e);
+      }
+    }
+  }, [timer.status, timer.mode, timer.timeLeft, notes]);
 
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [pipError, setPipError] = useState<string | null>(null);
@@ -345,6 +411,11 @@ export const TimerCard = ({
         timerSessionId: session.id
       });
       console.log('Session Saved to Firestore:', session);
+
+      // Handle linked task dual dispatch completion
+      if (linkedTaskId && onCompleteLinkedTask) {
+        await onCompleteLinkedTask(linkedTaskId, proofOfWork);
+      }
     } catch (error) {
       console.error('Error saving session to Firestore:', error);
     }
@@ -355,7 +426,11 @@ export const TimerCard = ({
     setNotes('');
     setTakeaways('');
     setSillyMistakes('');
+    setProofOfWork('');
     setStrategicTag(STRATEGIC_TAGS[0]);
+    if (onPrefillClear) {
+      onPrefillClear();
+    }
   };
 
   const submitAbandon = () => {
@@ -447,6 +522,7 @@ export const TimerCard = ({
       video.style.width = '1px';
       video.style.height = '1px';
       document.body.appendChild(video);
+      videoRef.current = video;
 
       // Trigger standard video play synchronously to preserve user gesture chain
       await video.play();
@@ -454,7 +530,19 @@ export const TimerCard = ({
       let isPiPRunning = true;
       video.addEventListener('leavepictureinpicture', () => {
         isPiPRunning = false;
-        video.remove();
+        if (videoRef.current) {
+          videoRef.current.remove();
+          videoRef.current = null;
+        }
+        if ('mediaSession' in navigator) {
+          try {
+            navigator.mediaSession.playbackState = 'none';
+            navigator.mediaSession.setActionHandler('play', null);
+            navigator.mediaSession.setActionHandler('pause', null);
+          } catch (e) {
+            console.error('Error in mediaSession cleanup:', e);
+          }
+        }
       });
 
       const updateCanvas = () => {
@@ -466,6 +554,28 @@ export const TimerCard = ({
       // Request Picture in Picture
       await video.requestPictureInPicture();
       updateCanvas();
+
+      // Configure navigator's MediaSession on creation
+      if ('mediaSession' in navigator) {
+        try {
+          navigator.mediaSession.metadata = new MediaMetadata({
+            title: `${timerStateRef.current.mode.toUpperCase() === 'FOCUS' ? '🎯 Focus Session' : '☕ Break Session'}`,
+            artist: notes || 'CAT Prep Focus Engine',
+            album: `Time Left: ${formatTime(timerStateRef.current.timeLeft)}`,
+          });
+          navigator.mediaSession.playbackState = (timerStateRef.current.status === 'running') ? 'playing' : 'paused';
+
+          navigator.mediaSession.setActionHandler('play', () => {
+            timerActionsRef.current.startTimer();
+          });
+
+          navigator.mediaSession.setActionHandler('pause', () => {
+            timerActionsRef.current.pauseTimer();
+          });
+        } catch (e) {
+          console.error('Error starting mediaSession inside togglePiP:', e);
+        }
+      }
     } catch (err: any) {
       console.error('PiP failed', err);
       if (err?.name === 'SecurityError' || err?.name === 'NotAllowedError' || String(err).includes('allow="picture-in-picture"')) {
@@ -1124,6 +1234,22 @@ export const TimerCard = ({
               </div>
 
               <div className="space-y-4 mb-8 text-left">
+                {linkedTaskId && (
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase mb-1 block">
+                      Proof of Work / Key Takeaway <span className="text-red-500">*</span>
+                    </label>
+                    <textarea 
+                      value={proofOfWork}
+                      onChange={(e) => setProofOfWork(e.target.value.substring(0, 200))}
+                      placeholder="Required: Verifiable study evidence or core task takeaway..."
+                      className="w-full bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-xl px-4 py-2 text-sm dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none h-20 resize-none"
+                    />
+                    <div className="text-right text-[10px] text-slate-400 mt-1">
+                      {proofOfWork.length}/200
+                    </div>
+                  </div>
+                )}
                 <div>
                   <label className="text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase mb-1 block">Key Takeaways</label>
                   <textarea 
@@ -1165,7 +1291,7 @@ export const TimerCard = ({
 
               <button 
                 onClick={submitSession}
-                disabled={rating === 0}
+                disabled={rating === 0 || (!!linkedTaskId && !proofOfWork.trim())}
                 className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-2xl font-bold transition-all text-white"
               >
                 SAVE LOG & CONTINUE
