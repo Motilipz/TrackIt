@@ -11,6 +11,27 @@ export const useTimer = (initialSettings: TimerSettings) => {
   const [overtimeSeconds, setOvertimeSeconds] = useState(0);
   const [marathonSection, setMarathonSection] = useState<'VARC' | 'DILR' | 'QA' | null>(null);
   
+  // Deadman Switch States
+  const [deadmanTarget, setDeadmanTarget] = useState<number>(() => Math.floor(Math.random() * (55 * 60 - 45 * 60 + 1)) + 45 * 60);
+  const [deadmanPromptActive, setDeadmanPromptActive] = useState(false);
+  const [deadmanPromptSecsLeft, setDeadmanPromptSecsLeft] = useState(180);
+  const [deadmanVerified, setDeadmanVerified] = useState(false);
+  const [deadmanFailed, setDeadmanFailed] = useState(false);
+
+  const resetDeadman = useCallback(() => {
+    setDeadmanTarget(Math.floor(Math.random() * (55 * 60 - 45 * 60 + 1)) + 45 * 60);
+    setDeadmanPromptActive(false);
+    setDeadmanPromptSecsLeft(180);
+    setDeadmanVerified(false);
+    setDeadmanFailed(false);
+  }, []);
+
+  const verifyPresence = useCallback(() => {
+    setDeadmanPromptActive(false);
+    setDeadmanVerified(true);
+    setDeadmanPromptSecsLeft(180);
+  }, []);
+  
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Sync timeLeft with settings when idle or when mode/settings change
@@ -51,6 +72,7 @@ export const useTimer = (initialSettings: TimerSettings) => {
     setOvertimeSeconds(0);
     setElapsedTime(0);
     setMarathonSection(null);
+    resetDeadman();
     
     if (settings.marathonMode) {
       setMode('marathon');
@@ -63,7 +85,7 @@ export const useTimer = (initialSettings: TimerSettings) => {
       setMode('focus');
       setTimeLeft(settings.focusTime * 60);
     }
-  }, [settings]);
+  }, [settings, resetDeadman]);
 
   const startTimer = () => {
     if (status === 'running') return;
@@ -89,6 +111,39 @@ export const useTimer = (initialSettings: TimerSettings) => {
     
     if (status === 'running' || status === 'overtime') {
       interval = setInterval(() => {
+        // Increment elapsedTime inside callback to be precise
+        setElapsedTime((prev) => {
+          const nextVal = prev + 1;
+          
+          // 1. Biological Threshold check (180:01 is 10801 seconds)
+          if (nextVal >= 10801) {
+            setStatus('paused');
+          }
+          
+          // 2. Deadman Switch start condition (random interval between min 45 and 55, i.e., 2700-3300 seconds)
+          const isStudyMode = mode === 'focus' || mode === 'mock' || mode === 'marathon';
+          if (isStudyMode && nextVal === deadmanTarget && !deadmanVerified && !deadmanFailed) {
+            setDeadmanPromptActive(true);
+          }
+          
+          return nextVal;
+        });
+
+        // Decrement Deadman counter if active
+        setDeadmanPromptActive((isActive) => {
+          if (isActive) {
+            setDeadmanPromptSecsLeft((secs) => {
+              if (secs <= 1) {
+                setDeadmanFailed(true);
+                setStatus('paused'); // timer halts
+                return 0;
+              }
+              return secs - 1;
+            });
+          }
+          return isActive;
+        });
+
         if (status === 'running') {
           setTimeLeft((prev) => {
             if (prev <= 1) {
@@ -134,10 +189,8 @@ export const useTimer = (initialSettings: TimerSettings) => {
             }
             return prev - 1;
           });
-          setElapsedTime((prev) => prev + 1);
         } else if (status === 'overtime') {
           setOvertimeSeconds((prev) => prev + 1);
-          setElapsedTime((prev) => prev + 1);
         }
       }, 1000);
     }
@@ -145,7 +198,7 @@ export const useTimer = (initialSettings: TimerSettings) => {
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [status, mode, settings, sessionsCompleted, marathonSection]);
+  }, [status, mode, settings, sessionsCompleted, marathonSection, deadmanTarget, deadmanPromptActive, deadmanVerified, deadmanFailed]);
 
   const completeSession = (
     rating: number, 
@@ -194,12 +247,19 @@ export const useTimer = (initialSettings: TimerSettings) => {
     completeSession,
     setMode,
     setStatus,
+    deadmanTarget,
+    deadmanPromptActive,
+    deadmanPromptSecsLeft,
+    deadmanVerified,
+    deadmanFailed,
+    verifyPresence,
     changeMode: (newMode: TimerMode) => {
       if (timerRef.current) clearInterval(timerRef.current);
       setMode(newMode);
       setStatus('idle');
       setOvertimeSeconds(0);
       setElapsedTime(0);
+      resetDeadman();
       if (newMode === 'focus') setTimeLeft(settings.focusTime * 60);
       else if (newMode === 'break') setTimeLeft(settings.breakTime * 60);
       else if (newMode === 'long-break') setTimeLeft(settings.longBreakTime * 60);

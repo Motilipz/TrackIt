@@ -17,57 +17,12 @@ interface ArenaBoardProps {
   wpm: number;
 }
 
-// Aspirational prep targets to seed into Firestore as real documents
-const PREP_BOTS: ArenaRanking[] = [
-  {
-    userId: 'bot_99_99',
-    displayName: '99.99%ile CAT Bot',
-    photoURL: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150&auto=format&fit=crop&q=80',
-    totalHours: 320.5,
-    streak: 42,
-    tasksCompleted: 165,
-    wpm: 450,
-    lastActive: new Date()
-  },
-  {
-    userId: 'bot_iim_ahmedabad',
-    displayName: 'Shreya (Aspirational IIM-A)',
-    photoURL: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80',
-    totalHours: 215.2,
-    streak: 28,
-    tasksCompleted: 110,
-    wpm: 380,
-    lastActive: new Date(Date.now() - 15 * 60 * 1000) // 15 mins ago
-  },
-  {
-    userId: 'bot_iim_bangalore',
-    displayName: 'Aman (Aspirational IIM-B)',
-    photoURL: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
-    totalHours: 168.0,
-    streak: 19,
-    tasksCompleted: 85,
-    wpm: 410,
-    lastActive: new Date(Date.now() - 40 * 60 * 1000) // 40 mins ago
-  },
-  {
-    userId: 'bot_xlri',
-    displayName: 'Neha (Aspirational XLRI)',
-    photoURL: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&auto=format&fit=crop&q=80',
-    totalHours: 112.4,
-    streak: 15,
-    tasksCompleted: 62,
-    wpm: 345,
-    lastActive: new Date(Date.now() - 2 * 3600 * 1000) // 2 hrs ago
-  }
-];
-
 export const ArenaBoard = ({ user, totalHours, streak, tasksCompleted, wpm }: ArenaBoardProps) => {
   const [realRankings, setRealRankings] = useState<ArenaRanking[]>([]);
   const [dataLoaded, setDataLoaded] = useState(false);
   const [sortBy, setSortBy] = useState<'points' | 'hours' | 'streak' | 'tasks' | 'wpm'>('points');
   const [searchQuery, setSearchQuery] = useState('');
   const [nudgeStates, setNudgeStates] = useState<Record<string, boolean>>({});
-  const [includeBenchmarks, setIncludeBenchmarks] = useState(true);
 
   // Live Sync tracking states
   interface LiveEvent {
@@ -95,8 +50,9 @@ export const ArenaBoard = ({ user, totalHours, streak, tasksCompleted, wpm }: Ar
     return () => clearInterval(interval);
   }, []);
 
-  // Compute points formula: (Hours * 10) + (Streak * 25) + (Tasks * 15) + (WPM / 10)
-  const getScore = (item: ArenaRanking | typeof PREP_BOTS[0]) => {
+  // Compute points formula: uses db points if compiled with decay, otherwise falls back to base formula
+  const getScore = (item: ArenaRanking) => {
+    if (typeof item.points === 'number') return item.points;
     return Math.round((item.totalHours * 10) + (item.streak * 25) + (item.tasksCompleted * 15) + (item.wpm / 10));
   };
 
@@ -104,13 +60,15 @@ export const ArenaBoard = ({ user, totalHours, streak, tasksCompleted, wpm }: Ar
   useEffect(() => {
     const q = query(collection(db, 'arena_rankings'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const rankings = snapshot.docs.map(d => {
-        const data = d.data();
-        return {
-          ...data,
-          lastActive: data.lastActive?.toDate ? data.lastActive.toDate() : new Date(data.lastActive || Date.now())
-        } as ArenaRanking;
-      });
+      const rankings = snapshot.docs
+        .map(d => {
+          const data = d.data();
+          return {
+            ...data,
+            lastActive: data.lastActive?.toDate ? data.lastActive.toDate() : new Date(data.lastActive || Date.now())
+          } as ArenaRanking;
+        })
+        .filter(r => r.userId && !r.userId.startsWith('bot_'));
 
       setRealRankings((prevRankings) => {
         if (prevRankings.length > 0) {
@@ -209,74 +167,6 @@ export const ArenaBoard = ({ user, totalHours, streak, tasksCompleted, wpm }: Ar
     return () => unsubscribe();
   }, [user.uid]);
 
-  // Auto-seed typical competitive candidates directly as real documents under /arena_rankings/{userId} in Firestore
-  useEffect(() => {
-    if (!dataLoaded) return;
-
-    PREP_BOTS.forEach(async (bot) => {
-      const alreadyExists = realRankings.some(r => r.userId === bot.userId);
-      if (!alreadyExists) {
-        try {
-          await setDoc(doc(db, 'arena_rankings', bot.userId), {
-            userId: bot.userId,
-            displayName: bot.displayName,
-            photoURL: bot.photoURL,
-            totalHours: bot.totalHours,
-            streak: bot.streak,
-            tasksCompleted: bot.tasksCompleted,
-            wpm: bot.wpm,
-            lastActive: Timestamp.fromDate(new Date(bot.lastActive))
-          });
-        } catch (err) {
-          console.error(`Failed to seed simulated competitor ${bot.displayName} into Firestore:`, err);
-        }
-      }
-    });
-  }, [dataLoaded, realRankings]);
-
-  // Periodic background study updates of bots directly inside Firestore database!
-  // This real-time database update triggers 'onSnapshot' callbacks on all connected devices, showing true live synchronization!
-  useEffect(() => {
-    if (!dataLoaded || realRankings.length === 0) return;
-
-    const interval = setInterval(async () => {
-      // 35% chance each interval (every 22 seconds) to tick a random competitor doc
-      if (Math.random() > 0.35) return;
-
-      const botCandidates = realRankings.filter(r => r.userId.startsWith('bot_'));
-      if (botCandidates.length === 0) return;
-
-      const randomBot = botCandidates[Math.floor(Math.random() * botCandidates.length)];
-      
-      const metric = Math.random() > 0.5 ? 'hours' : 'tasks';
-      let updateData: Partial<ArenaRanking> = {};
-      
-      if (metric === 'hours') {
-        const increment = parseFloat((Math.random() * 0.3 + 0.1).toFixed(1));
-        updateData = {
-          totalHours: Number((randomBot.totalHours + increment).toFixed(1)),
-        };
-      } else {
-        updateData = {
-          tasksCompleted: randomBot.tasksCompleted + 1,
-        };
-      }
-
-      try {
-        const botRef = doc(db, 'arena_rankings', randomBot.userId);
-        await setDoc(botRef, {
-          ...randomBot,
-          ...updateData,
-          lastActive: Timestamp.now()
-        });
-      } catch (err) {
-        console.error("Failed to update simulated competitor live doc in Firestore:", err);
-      }
-    }, 22000);
-
-    return () => clearInterval(interval);
-  }, [dataLoaded, realRankings]);
-
   // Merge, filter, and sort candidates
   const candidates = useMemo(() => {
     // 1. Incorporate real database users. Make sure currently active state of current logged-in user is either matched or updated.
@@ -304,6 +194,10 @@ export const ArenaBoard = ({ user, totalHours, streak, tasksCompleted, wpm }: Ar
             streak: streak,
             tasksCompleted: tasksCompleted,
             wpm: wpm,
+            points: r.points, // Preserve decay points calculation!
+            decayedHours: r.decayedHours, // Preserve decayed hours!
+            auditStatus: r.auditStatus, // Preserve auditStatus!
+            sheriffBadge: r.sheriffBadge, // Preserve sheriff status!
             lastActive: new Date()
           };
         }
@@ -311,10 +205,8 @@ export const ArenaBoard = ({ user, totalHours, streak, tasksCompleted, wpm }: Ar
       });
     }
 
-    // 2. Conditionally filter out simulated benchmarks if user toggles them off
-    if (!includeBenchmarks) {
-      list = list.filter(r => !r.userId.startsWith('bot_'));
-    }
+    // 2. Safeguard to filter out any remnants of bot competitors as only real human users are allowed
+    list = list.filter(r => r.userId && !r.userId.startsWith('bot_'));
 
     // Sort accordingly
     const sorted = [...list].sort((a, b) => {
@@ -327,7 +219,7 @@ export const ArenaBoard = ({ user, totalHours, streak, tasksCompleted, wpm }: Ar
     });
 
     return sorted;
-  }, [realRankings, sortBy, user, totalHours, streak, tasksCompleted, wpm, includeBenchmarks]);
+  }, [realRankings, sortBy, user, totalHours, streak, tasksCompleted, wpm]);
 
   // Filter with query
   const filteredCandidates = useMemo(() => {
@@ -350,7 +242,10 @@ export const ArenaBoard = ({ user, totalHours, streak, tasksCompleted, wpm }: Ar
   // Compute stats for current user
   const userStats = useMemo(() => {
     const userRankVal = candidates.findIndex(c => c.userId === user.uid) + 1;
-    const userPoints = Math.round((totalHours * 10) + (streak * 25) + (tasksCompleted * 15) + (wpm / 10));
+    const dbRecord = realRankings.find(c => c.userId === user.uid);
+    const userPoints = dbRecord && typeof dbRecord.points === 'number' 
+      ? dbRecord.points 
+      : Math.round((totalHours * 10) + (streak * 25) + (tasksCompleted * 15) + (wpm / 10));
     const nextRival = userRankVal > 1 ? candidates[userRankVal - 2] : null;
     const currentScore = userPoints;
     const gapToNext = nextRival ? Math.max(0, getScore(nextRival) - currentScore) : 0;
@@ -361,7 +256,7 @@ export const ArenaBoard = ({ user, totalHours, streak, tasksCompleted, wpm }: Ar
       gapToNext,
       nextRivalName: nextRival?.displayName || ''
     };
-  }, [candidates, user.uid, totalHours, streak, tasksCompleted, wpm]);
+  }, [candidates, realRankings, user.uid, totalHours, streak, tasksCompleted, wpm]);
 
   // Micro-interaction: nudge mechanism
   const triggerNudge = (rivalUserId: string) => {
@@ -370,6 +265,75 @@ export const ArenaBoard = ({ user, totalHours, streak, tasksCompleted, wpm }: Ar
     setTimeout(() => {
       setNudgeStates(prev => ({ ...prev, [rivalUserId]: false }));
     }, 2500);
+  };
+
+  // Gamified peer audit: vouch pass or flag as fraudulent
+  const submitAudit = async (candidate: ArenaRanking, type: 'pass' | 'flag_fraud') => {
+    try {
+      const docRef = doc(db, 'arena_rankings', candidate.userId);
+      const flaggedBy = candidate.flaggedBy || [];
+      const passedBy = candidate.passedBy || [];
+      
+      let nextFlagged = [...flaggedBy];
+      let nextPassed = [...passedBy];
+      
+      // Prevent double auditing
+      if (nextFlagged.includes(user.uid) || nextPassed.includes(user.uid)) {
+        alert("You have already reviewed this candidate's recent study batch.");
+        return;
+      }
+      
+      if (type === 'flag_fraud') {
+        nextFlagged.push(user.uid);
+      } else {
+        nextPassed.push(user.uid);
+      }
+      
+      let nextStatus = candidate.auditStatus || 'none';
+      let nextPoints = candidate.points || getScore(candidate);
+      
+      if (nextFlagged.length >= 1) {
+        nextStatus = 'flagged'; // Pending Review
+      }
+      
+      if (nextFlagged.length >= 2) {
+        nextStatus = 'banned'; // Banned fraudsters receive points deduction
+        nextPoints = Math.max(0, nextPoints - 150);
+      }
+      
+      if (nextPassed.length >= 2) {
+        nextStatus = 'passed'; // Verified sessions receive extra 50 bonus AP
+        nextPoints = nextPoints + 50;
+      }
+      
+      await setDoc(docRef, {
+        flaggedBy: nextFlagged,
+        passedBy: nextPassed,
+        auditStatus: nextStatus,
+        points: nextPoints
+      }, { merge: true });
+      
+      // Award Sheriff Badge to active auditor
+      const auditorRef = doc(db, 'arena_rankings', user.uid);
+      await setDoc(auditorRef, {
+        sheriffBadge: true
+      }, { merge: true });
+      
+      // Dispatch live feed alert
+      const actionLabel = type === 'flag_fraud' ? 'FLAGGED AS SUSPICIOUS 🚨' : 'VOUCHED & VERIFIED ✅';
+      setLiveEvents(prev => [
+        {
+          id: `audit_${Date.now()}`,
+          timestamp: new Date(),
+          message: `🛡️ Auditor ${user.displayName || 'Sheriff'} ${actionLabel} ${candidate.displayName}'s recent study block!`,
+          type: 'info'
+        },
+        ...prev
+      ]);
+      
+    } catch (err) {
+      console.error("Peer audit validation failed:", err);
+    }
   };
 
   const getSortTitle = () => {
@@ -399,25 +363,6 @@ export const ArenaBoard = ({ user, totalHours, streak, tasksCompleted, wpm }: Ar
           <p className="text-slate-500 dark:text-zinc-400">
             Rise through public engagement standings. Master consistency, log serious volume, and clock high verbal velocities.
           </p>
-        </div>
-
-        {/* Benchmarking toggle */}
-        <div className="flex items-center gap-3">
-          <label className="text-xs font-bold text-slate-500 dark:text-zinc-400 uppercase tracking-wider">
-            Aspirational Benchmarks
-          </label>
-          <button
-            onClick={() => setIncludeBenchmarks(!includeBenchmarks)}
-            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-              includeBenchmarks ? 'bg-indigo-650' : 'bg-slate-200 dark:bg-zinc-800'
-            }`}
-          >
-            <span
-              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
-                includeBenchmarks ? 'translate-x-5' : 'translate-x-0'
-              }`}
-            />
-          </button>
         </div>
       </div>
 
@@ -595,20 +540,36 @@ export const ArenaBoard = ({ user, totalHours, streak, tasksCompleted, wpm }: Ar
             </div>
             
             {podium.second.userId !== user.uid && (
-              <button 
-                onClick={() => triggerNudge(podium.second!.userId)}
-                className={`mt-4 text-xs font-bold px-3 py-1.5 rounded-full transition-all w-full flex items-center justify-center gap-1.5 ${
-                  nudgeStates[podium.second.userId]
-                    ? 'bg-emerald-500 text-white'
-                    : 'bg-indigo-50 dark:bg-indigo-950/35 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100'
-                }`}
-              >
-                {nudgeStates[podium.second.userId] ? (
-                  <>🎯 Challenge Dispatched!</>
-                ) : (
-                  <>📣 Nudge Candidate</>
-                )}
-              </button>
+              <div className="w-full mt-4 flex flex-col gap-2">
+                <div className="flex gap-2 w-full">
+                  <button 
+                    onClick={() => submitAudit(podium.second!, 'pass')}
+                    className="flex-1 py-1.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/20 border border-emerald-500/20 rounded-xl text-[10px] font-black text-emerald-600 dark:text-emerald-400 select-none transition-all cursor-pointer flex items-center justify-center gap-1"
+                  >
+                    👍 Vouch
+                  </button>
+                  <button 
+                    onClick={() => submitAudit(podium.second!, 'flag_fraud')}
+                    className="flex-1 py-1.5 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/20 border border-rose-500/20 rounded-xl text-[10px] font-black text-rose-600 dark:text-rose-400 select-none transition-all cursor-pointer flex items-center justify-center gap-1"
+                  >
+                    👎 Flag
+                  </button>
+                </div>
+                <button 
+                  onClick={() => triggerNudge(podium.second!.userId)}
+                  className={`text-xs font-bold px-3 py-1.5 rounded-full transition-all w-full flex items-center justify-center gap-1.5 ${
+                    nudgeStates[podium.second.userId]
+                      ? 'bg-emerald-500 text-white'
+                      : 'bg-indigo-50 dark:bg-indigo-950/35 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100'
+                  }`}
+                >
+                  {nudgeStates[podium.second.userId] ? (
+                    <>🎯 Challenge Dispatched!</>
+                  ) : (
+                    <>📣 Nudge Candidate</>
+                  )}
+                </button>
+              </div>
             )}
           </motion.div>
         )}
@@ -661,20 +622,36 @@ export const ArenaBoard = ({ user, totalHours, streak, tasksCompleted, wpm }: Ar
             </div>
             
             {podium.first.userId !== user.uid && (
-              <button 
-                onClick={() => triggerNudge(podium.first!.userId)}
-                className={`mt-4 text-xs font-bold px-3 py-1.5 rounded-full transition-all w-full flex items-center justify-center gap-1.5 ${
-                  nudgeStates[podium.first.userId]
-                    ? 'bg-emerald-500 text-white'
-                    : 'bg-amber-500 text-amber-950 hover:bg-amber-400 font-extrabold shadow-sm'
-                }`}
-              >
-                {nudgeStates[podium.first.userId] ? (
-                  <>🎯 Challenge Dispatched!</>
-                ) : (
-                  <>⚡ Challenge Leader</>
-                )}
-              </button>
+              <div className="w-full mt-4 flex flex-col gap-2">
+                <div className="flex gap-2 w-full">
+                  <button 
+                    onClick={() => submitAudit(podium.first!, 'pass')}
+                    className="flex-1 py-1.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/20 border border-emerald-550/20 rounded-xl text-[10px] font-black text-emerald-600 dark:text-emerald-400 select-none transition-all cursor-pointer flex items-center justify-center gap-1"
+                  >
+                    👍 Vouch
+                  </button>
+                  <button 
+                    onClick={() => submitAudit(podium.first!, 'flag_fraud')}
+                    className="flex-1 py-1.5 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/20 border border-rose-550/20 rounded-xl text-[10px] font-black text-rose-600 dark:text-rose-455 select-none transition-all cursor-pointer flex items-center justify-center gap-1"
+                  >
+                    👎 Flag
+                  </button>
+                </div>
+                <button 
+                  onClick={() => triggerNudge(podium.first!.userId)}
+                  className={`text-xs font-bold px-3 py-1.5 rounded-full transition-all w-full flex items-center justify-center gap-1.5 ${
+                    nudgeStates[podium.first.userId]
+                      ? 'bg-emerald-500 text-white'
+                      : 'bg-amber-500 text-amber-950 hover:bg-amber-400 font-extrabold shadow-sm'
+                  }`}
+                >
+                  {nudgeStates[podium.first.userId] ? (
+                    <>🎯 Challenge Dispatched!</>
+                  ) : (
+                    <>⚡ Challenge Leader</>
+                  )}
+                </button>
+              </div>
             )}
           </motion.div>
         )}
@@ -725,20 +702,36 @@ export const ArenaBoard = ({ user, totalHours, streak, tasksCompleted, wpm }: Ar
             </div>
             
             {podium.third.userId !== user.uid && (
-              <button 
-                onClick={() => triggerNudge(podium.third!.userId)}
-                className={`mt-4 text-xs font-bold px-3 py-1.5 rounded-full transition-all w-full flex items-center justify-center gap-1.5 ${
-                  nudgeStates[podium.third.userId]
-                    ? 'bg-emerald-500 text-white'
-                    : 'bg-indigo-50 dark:bg-indigo-950/35 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100'
-                }`}
-              >
-                {nudgeStates[podium.third.userId] ? (
-                  <>🎯 Challenge Dispatched!</>
-                ) : (
-                  <>📣 Nudge Candidate</>
-                )}
-              </button>
+              <div className="w-full mt-4 flex flex-col gap-2">
+                <div className="flex gap-2 w-full">
+                  <button 
+                    onClick={() => submitAudit(podium.third!, 'pass')}
+                    className="flex-1 py-1.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/20 border border-emerald-550/20 rounded-xl text-[10px] font-black text-emerald-600 dark:text-emerald-400 select-none transition-all cursor-pointer flex items-center justify-center gap-1"
+                  >
+                    👍 Vouch
+                  </button>
+                  <button 
+                    onClick={() => submitAudit(podium.third!, 'flag_fraud')}
+                    className="flex-1 py-1.5 bg-rose-50 hover:bg-rose-105 dark:bg-rose-950/20 border border-rose-550/20 rounded-xl text-[10px] font-black text-rose-600 dark:text-rose-455 select-none transition-all cursor-pointer flex items-center justify-center gap-1"
+                  >
+                    👎 Flag
+                  </button>
+                </div>
+                <button 
+                  onClick={() => triggerNudge(podium.third!.userId)}
+                  className={`text-xs font-bold px-3 py-1.5 rounded-full transition-all w-full flex items-center justify-center gap-1.5 ${
+                    nudgeStates[podium.third.userId]
+                      ? 'bg-emerald-500 text-white'
+                      : 'bg-indigo-50 dark:bg-indigo-950/35 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100'
+                  }`}
+                >
+                  {nudgeStates[podium.third.userId] ? (
+                    <>🎯 Challenge Dispatched!</>
+                  ) : (
+                    <>📣 Nudge Candidate</>
+                  )}
+                </button>
+              </div>
             )}
           </motion.div>
         )}
@@ -878,9 +871,31 @@ export const ArenaBoard = ({ user, totalHours, streak, tasksCompleted, wpm }: Ar
                                 </span>
                               )}
                             </h5>
-                            <span className="text-[10px] text-slate-400 font-medium italic block mt-0.5">
-                              {candidate.userId.startsWith('bot_') ? 'Aspirational Target Bot' : 'Real-Time Candidate'}
-                            </span>
+                            <div className="flex flex-wrap items-center gap-1 mt-1">
+                              <span className="text-[10px] text-slate-400 font-medium italic">
+                                Real-Time Candidate
+                              </span>
+                              {candidate.sheriffBadge && (
+                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-amber-500/15 border border-amber-500/30 text-amber-500 text-[8px] font-black uppercase rounded-md">
+                                  🛡️ TRUSTED SHERIFF
+                                </span>
+                              )}
+                              {candidate.auditStatus === 'passed' && (
+                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-emerald-500/15 border border-emerald-500/30 text-emerald-500 text-[8px] font-black uppercase rounded-md animate-pulse">
+                                  ✅ VERIFIED (+50 AP)
+                                </span>
+                              )}
+                              {candidate.auditStatus === 'flagged' && (
+                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-yellow-500/15 border border-yellow-500/30 text-yellow-600 dark:text-yellow-450 text-[8px] font-black uppercase rounded-md">
+                                  ⚠️ PENDING REVIEW
+                                </span>
+                              )}
+                              {candidate.auditStatus === 'banned' && (
+                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-red-500/15 border border-red-500/30 text-red-500 text-[8px] font-black uppercase rounded-md">
+                                  ⛔ FLAG PENALTY
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </td>
@@ -934,39 +949,52 @@ export const ArenaBoard = ({ user, totalHours, streak, tasksCompleted, wpm }: Ar
                       {/* Last updated and state */}
                       <td className="px-6 py-4">
                         <span className="text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase flex items-center gap-1.5">
-                          {candidate.userId === 'bot_99_99' ? (
-                            <>
-                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse inline-block" />
-                              <span>Active {formatDistanceToNow(candidate.lastActive)} ago</span>
-                            </>
-                          ) : (
-                            <span>Active {formatDistanceToNow(candidate.lastActive)} ago</span>
-                          )}
+                          <span>Active {formatDistanceToNow(candidate.lastActive)} ago</span>
                         </span>
                       </td>
 
-                      {/* Send Nudge button */}
+                      {/* Send Nudge / Peer Audit buttons */}
                       <td className="px-6 py-4 text-right">
-                        {!isUser ? (
-                          <button
-                            onClick={() => triggerNudge(candidate.userId)}
-                            className={`text-[10px] font-extrabold px-2.5 py-1 rounded-full transition-all ${
-                              nudgeStates[candidate.userId]
-                                ? 'bg-emerald-500 text-white'
-                                : 'bg-slate-50 dark:bg-zinc-800 text-slate-600 dark:text-zinc-400 hover:bg-indigo-50 hover:text-indigo-650'
-                            }`}
-                          >
-                            {nudgeStates[candidate.userId] ? (
-                              '🎯 Dispatched!'
-                            ) : (
-                              '📣 Nudge'
-                            )}
-                          </button>
-                        ) : (
-                          <span className="text-[10px] uppercase font-bold text-indigo-400 mr-2 tracking-wider">
-                            You
-                          </span>
-                        )}
+                        <div className="flex items-center justify-end gap-3 font-semibold dark:text-zinc-200">
+                          {!isUser && (
+                            <div className="flex items-center gap-1.5 border-r border-slate-100 dark:border-zinc-800 pr-3">
+                              <button
+                                onClick={() => submitAudit(candidate, 'pass')}
+                                title="Peer Audit: Vouch for authentic study logs with verifiable timer intervals (+50 AP on 2 vouches)"
+                                className="px-2 py-1 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 border border-emerald-250/20 rounded text-xs select-none cursor-pointer transition-all active:scale-90"
+                              >
+                                👍 Vouch
+                              </button>
+                              <button
+                                onClick={() => submitAudit(candidate, 'flag_fraud')}
+                                title="Peer Audit: Flag raw log entries as overnight padding, false speed, or fake targets (-150 AP deduction on 2 flags)"
+                                className="px-2 py-1 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-105 border border-rose-250/20 rounded text-xs select-none cursor-pointer text-rose-600 dark:text-rose-450 transition-all active:scale-90"
+                              >
+                                👎 Flag
+                              </button>
+                            </div>
+                          )}
+                          {!isUser ? (
+                            <button
+                              onClick={() => triggerNudge(candidate.userId)}
+                              className={`text-[10px] font-extrabold px-2.5 py-1 rounded-full transition-all ${
+                                nudgeStates[candidate.userId]
+                                  ? 'bg-emerald-500 text-white'
+                                  : 'bg-slate-50 dark:bg-zinc-800 text-slate-600 dark:text-zinc-400 hover:bg-indigo-50 hover:text-indigo-650'
+                              }`}
+                            >
+                              {nudgeStates[candidate.userId] ? (
+                                '🎯 Dispatched!'
+                              ) : (
+                                '📣 Nudge'
+                              )}
+                            </button>
+                          ) : (
+                            <span className="text-[10px] uppercase font-bold text-indigo-400 mr-2 tracking-wider">
+                              You
+                            </span>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );

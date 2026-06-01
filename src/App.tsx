@@ -993,9 +993,73 @@ function AppContent() {
   useEffect(() => {
     if (!user) return;
 
-    const totalHoursNum = parseFloat(stats.totalHours) || 0;
-    const completedTasksCount = dailyTasks.filter(t => t.status === 'done').length;
-    const highestWpm = readingLogs.length > 0 ? Math.max(...readingLogs.map(l => l.wpm || 0)) : 0;
+    // Filter out unverified study sessions and junk reading sessions
+    const validLogs = logs.filter(l => !l.isUnverifiedSession);
+    const validReadingLogs = readingLogs.filter(l => !l.isJunkSession && (l.wpm || 0) <= 800);
+
+    // Group total valid minutes by day (YYYY-MM-DD format)
+    const dailyMinutesMap = new Map<string, number>();
+
+    validLogs.forEach(log => {
+      let dateStr = '';
+      if (log.date instanceof Date) {
+        dateStr = format(log.date, 'yyyy-MM-dd');
+      } else if (log.date && typeof (log.date as any).toDate === 'function') {
+        dateStr = format((log.date as any).toDate(), 'yyyy-MM-dd');
+      } else {
+        dateStr = format(new Date(log.date), 'yyyy-MM-dd');
+      }
+      dailyMinutesMap.set(dateStr, (dailyMinutesMap.get(dateStr) || 0) + (log.duration || 0));
+    });
+
+    validReadingLogs.forEach(rLog => {
+      let dateStr = '';
+      if (rLog.date instanceof Date) {
+        dateStr = format(rLog.date, 'yyyy-MM-dd');
+      } else if (rLog.date && typeof (rLog.date as any).toDate === 'function') {
+        dateStr = format((rLog.date as any).toDate(), 'yyyy-MM-dd');
+      } else {
+        dateStr = format(new Date(rLog.date), 'yyyy-MM-dd');
+      }
+      const rDurationMins = Math.floor((rLog.duration || 0) / 60) || 1;
+      dailyMinutesMap.set(dateStr, (dailyMinutesMap.get(dateStr) || 0) + rDurationMins);
+    });
+
+    // Apply asymptotic decay curve DAILY
+    let totalDecayedHours = 0;
+    dailyMinutesMap.forEach((mins) => {
+      const rawHours = mins / 60;
+      let decayedHours = 0;
+      if (rawHours <= 1) {
+        decayedHours = rawHours * 1.0;
+      } else if (rawHours <= 3) {
+        decayedHours = 1.0 * 1.0 + (rawHours - 1.0) * 0.75;
+      } else if (rawHours <= 6) {
+        decayedHours = 1.0 * 1.0 + 2.0 * 0.75 + (rawHours - 3.0) * 0.50;
+      } else {
+        decayedHours = 1.0 * 1.0 + 2.0 * 0.75 + 3.0 * 0.50 + (rawHours - 6.0) * 0.10;
+      }
+      totalDecayedHours += decayedHours;
+    });
+
+    const completedTasks = dailyTasks.filter(t => t.status === 'done');
+    const completedTasksCount = completedTasks.length;
+
+    const highestWpm = validReadingLogs.length > 0 
+      ? Math.max(...validReadingLogs.map(l => l.wpm || 0)) 
+      : 0;
+
+    let taskPointsSum = 0;
+    completedTasks.forEach(task => {
+      if (task.is_frog === true) {
+        taskPointsSum += Math.round(15 * 2.5); // 2.5x base task AP
+      } else {
+        taskPointsSum += 15;
+      }
+    });
+
+    const finalPoints = Math.round((totalDecayedHours * 10) + (streak * 25) + taskPointsSum + (highestWpm / 10));
+    const totalHoursActual = parseFloat(stats.totalHours) || 0;
 
     const syncArena = async () => {
       try {
@@ -1004,12 +1068,15 @@ function AppContent() {
           userId: user.uid,
           displayName: user.displayName || 'Anonymous Candidate',
           photoURL: user.photoURL || 'https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y',
-          totalHours: totalHoursNum,
+          totalHours: totalHoursActual,
+          decayedHours: totalDecayedHours,
           streak: streak,
           tasksCompleted: completedTasksCount,
           wpm: highestWpm,
+          points: finalPoints,
           lastActive: Timestamp.now()
-        });
+        }, { merge: true });
+        console.log("Leaderboard synchronized successfully with points:", finalPoints);
       } catch (err) {
         console.error("Failed to sync arena ranking:", err);
       }
@@ -1020,7 +1087,7 @@ function AppContent() {
     }, 2000);
 
     return () => clearTimeout(timer);
-  }, [user, stats.totalHours, streak, dailyTasks, readingLogs]);
+  }, [user, stats.totalHours, streak, dailyTasks, readingLogs, logs]);
 
   if (loading) {
     return (

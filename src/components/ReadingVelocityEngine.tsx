@@ -152,6 +152,7 @@ export const ReadingVelocityEngine: React.FC<RVEProps> = ({ userId, onZenModeCha
     
     const minutes = Math.max(seconds, 1) / 60;
     const wpm = Math.round(words / minutes);
+    const isJunkSession = wpm > 800;
 
     try {
       await addDoc(collection(db, 'users', userId, 'readingLogs'), {
@@ -164,6 +165,7 @@ export const ReadingVelocityEngine: React.FC<RVEProps> = ({ userId, onZenModeCha
         gradeLevel,
         comprehensionSummary: summary,
         domain,
+        isJunkSession,
         date: Timestamp.now(),
         createdAt: Timestamp.now()
       });
@@ -403,6 +405,23 @@ export const ReadingVelocityEngine: React.FC<RVEProps> = ({ userId, onZenModeCha
                       className="w-full bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-2xl px-6 py-4 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 min-h-[160px] leading-relaxed"
                     />
                   </div>
+
+                  {(() => {
+                    const finalMins = Math.max(seconds, 1) / 60;
+                    const finalWpm = Math.round(words / finalMins);
+                    if (finalWpm > 800) {
+                      return (
+                        <div className="p-4 bg-red-500/10 border border-red-500/20 text-red-500 rounded-2xl text-xs flex gap-3 items-start leading-relaxed animate-pulse">
+                          <span className="text-lg">⚠️</span>
+                          <div>
+                            <span className="font-bold block uppercase tracking-tight mb-0.5">Biological Threshold Exceeded ({finalWpm} WPM)</span>
+                            Your reading velocity exceeds the human biological constraint of 800 WPM. This session is flagged as a <strong>"Junk Session"</strong> and will yield <strong>0 Arena Points (AP)</strong>.
+                          </div>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
 
                   <div className="flex gap-4">
                     <button 

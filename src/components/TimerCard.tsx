@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Volume2, VolumeX, Play, Pause, RotateCcw, Save, Settings as SettingsIcon, X, Star, AlertTriangle, Maximize2, SkipForward, Shield, Zap, CloudRain, Trees, Waves, Music, Link, Volume1, Download, Tv } from 'lucide-react';
+import { Volume2, VolumeX, Play, Pause, RotateCcw, Save, Settings as SettingsIcon, X, Star, AlertTriangle, Maximize2, SkipForward, Shield, Zap, CloudRain, Trees, Waves, Music, Link, Volume1, Download, Tv, ShieldAlert } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useTimer } from '../hooks/useTimer';
 import { Session, TimerSettings, StudyLog } from '../types';
@@ -254,6 +254,19 @@ export const TimerCard = ({
       }
     }
   }, [prefilledNotes, onPrefillClear, timer]);
+
+  // Listen for keydown verifying presence when deadman challenge is active
+  useEffect(() => {
+    if (!timer.deadmanPromptActive) return;
+
+    const handleKeyPress = () => {
+      timer.verifyPresence();
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, [timer.deadmanPromptActive, timer.verifyPresence]);
+
   const [showRatingModal, setShowRatingModal] = useState(false);
   const [showAbandonModal, setShowAbandonModal] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -384,6 +397,8 @@ export const TimerCard = ({
       return;
     }
 
+    const isUnverifiedSession = timer.deadmanFailed || timer.deadmanPromptActive;
+
     const session: Session = {
       id: crypto.randomUUID(),
       timestamp: Date.now(),
@@ -404,8 +419,9 @@ export const TimerCard = ({
         category,
         duration: Math.floor(timer.elapsedTime / 60) || 1, // Store in minutes, min 1m
         date: Timestamp.now(),
-        notes: `${notes}${takeaways ? '\nTakeaways: ' + takeaways : ''}${sillyMistakes ? '\nSilly Mistakes: ' + sillyMistakes : ''}${strategicTag ? '\nStrategy: ' + strategicTag : ''}`,
+        notes: `${notes}${takeaways ? '\nTakeaways: ' + takeaways : ''}${sillyMistakes ? '\nSilly Mistakes: ' + sillyMistakes : ''}${strategicTag ? '\nStrategy: ' + strategicTag : ''}${isUnverifiedSession ? ' (UNVERIFIED AUTO-HALTED)' : ''}`,
         rating,
+        isUnverifiedSession,
         createdAt: Timestamp.now(),
         updatedAt: Timestamp.now(),
         timerSessionId: session.id
@@ -725,7 +741,7 @@ export const TimerCard = ({
               timer.mode === 'long-break' ? "bg-blue-500" : "bg-purple-500"
             )} />
 
-            {/* Simulated Blocker Overlay */}
+            {/* Simulated Blocker Overlay & Deadman Switch Challenges */}
             <AnimatePresence>
               {(timer.settings.strictMode && (timer.status === 'running' || timer.status === 'overtime')) && (
                 <motion.div 
@@ -748,6 +764,30 @@ export const TimerCard = ({
                     className="px-8 py-4 bg-red-600 hover:bg-red-500 text-white rounded-2xl font-bold transition-all"
                   >
                     EMERGENCY UNLOCK
+                  </button>
+                </motion.div>
+              )}
+
+              {timer.deadmanPromptActive && (
+                <motion.div 
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="absolute inset-0 z-[100] bg-zinc-950/95 backdrop-blur-md flex flex-col items-center justify-center p-8 text-center border-4 border-amber-500 animate-pulse"
+                >
+                  <AlertTriangle className="w-16 h-16 text-amber-500 mb-4 animate-bounce" />
+                  <h2 className="text-3xl font-black text-white mb-2 tracking-tight">⚡ CHRONO DEFENSE ENGAGED ⚡</h2>
+                  <p className="text-zinc-400 max-w-sm mb-6 text-sm leading-relaxed">
+                    Anti-ghost protocol active. Verify that you are at your machine to secure your study session points.
+                  </p>
+                  <div className="text-4xl font-mono font-black text-amber-400 mb-6 bg-zinc-900 border border-zinc-800 px-6 py-3 rounded-2xl shadow-xl">
+                    {Math.floor(timer.deadmanPromptSecsLeft / 60)}:{(timer.deadmanPromptSecsLeft % 60).toString().padStart(2, '0')}
+                  </div>
+                  <button 
+                    onClick={() => timer.verifyPresence()}
+                    className="px-8 py-4 bg-amber-500 hover:bg-amber-600 text-zinc-950 font-black rounded-2xl tracking-widest uppercase transition-all shadow-lg hover:scale-105 active:scale-95"
+                  >
+                    I AM ACTIVE (PRESS ANY KEY)
                   </button>
                 </motion.div>
               )}
@@ -881,6 +921,16 @@ export const TimerCard = ({
                         className="text-orange-500/50 text-[10px] font-mono mt-1 uppercase tracking-widest"
                       >
                         + Overtime
+                      </motion.div>
+                    )}
+                    {timer.deadmanFailed && (
+                      <motion.div 
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        className="text-red-500 font-bold text-[10px] uppercase tracking-widest mt-2 flex items-center gap-1 bg-red-500/10 px-2 py-1 rounded-full border border-red-500/30"
+                      >
+                        <ShieldAlert size={12} className="animate-pulse" />
+                        AUTO-HALTED (UNVERIFIED)
                       </motion.div>
                     )}
                   </>

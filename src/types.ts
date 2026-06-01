@@ -12,6 +12,7 @@ export interface StudyLog {
   createdAt: Date;
   startTime?: string;
   endTime?: string;
+  isUnverifiedSession?: boolean;
 }
 
 export interface Session {
@@ -54,6 +55,7 @@ export interface ReadingLog {
   domain: string;
   date: Date;
   createdAt: Date;
+  isJunkSession?: boolean;
 }
 
 export interface DailyTask {
@@ -80,4 +82,11 @@ export interface ArenaRanking {
   tasksCompleted: number;
   wpm: number;
   lastActive: Date;
+  points?: number;
+  decayedHours?: number;
+  auditStatus?: 'none' | 'pending' | 'flagged' | 'passed' | 'banned';
+  flagsCount?: number;
+  flaggedBy?: string[];
+  passedBy?: string[];
+  sheriffBadge?: boolean;
 }
