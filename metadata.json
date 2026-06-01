@@ -1,5 +1,6 @@
 {
   "name": "Remix: CAT Prep Tracker",
   "description": "A focused time logging and progress dashboard for CAT (Common Admission Test) preparation, featuring weekly and monthly analytics.",
-  "requestFramePermissions": []
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

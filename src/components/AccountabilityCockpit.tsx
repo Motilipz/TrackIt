@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { 
   Shield, Award, DollarSign, Users, Flame, Clock, 
   Upload, CheckCircle2, ChevronRight, X, Sparkles, 
-  AlertOctagon, Globe, Trash2, Mail, FileText, Download
+  AlertOctagon, Globe, Trash2, Mail, FileText, Download,
+  ExternalLink
 } from 'lucide-react';
 import { db } from '../firebase';
 import { doc, setDoc, collection, addDoc, getDocs, deleteDoc, onSnapshot, query, where } from 'firebase/firestore';
@@ -59,14 +60,30 @@ const ANTI_CHARITIES = [
   'The Infinite Scrolling Foundation (Supporting attention dilution)'
 ];
 
+const getWeekId = (date: Date) => {
+  const temp = new Date(date);
+  const day = temp.getDay();
+  const diff = temp.getDate() - day; // adjust to Sunday
+  const sunday = new Date(temp.setDate(diff));
+  return sunday.toISOString().split('T')[0]; // e.g. "2026-05-31"
+};
+
 export const AccountabilityCockpit: React.FC<AccountabilityCockpitProps> = ({
   user,
   dailyTasks,
   logs
 }) => {
-  const [settings, setSettings] = useState<AccountabilitySettings>(DEFAULT_ACCOUNTABILITY);
+  const [settings, setSettings] = useState<AccountabilitySettings>(() => ({
+    ...DEFAULT_ACCOUNTABILITY,
+    boardEmails: user?.email || 'mentor@example.com'
+  }));
   const [vaultItems, setVaultItems] = useState<VaultItem[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+
+  const currentWeekSunday = getWeekId(new Date());
+  const [auditSentThisWeek, setAuditSentThisWeek] = useState(() => {
+    return localStorage.getItem(`audit_sent_${currentWeekSunday}`) === 'true';
+  });
 
   // Form states for adding stand-alone Vault proof
   const [proofTaskTitle, setProofTaskTitle] = useState('');
@@ -80,9 +97,41 @@ export const AccountabilityCockpit: React.FC<AccountabilityCockpitProps> = ({
   // Email Audit preview state
   const [showAuditPreview, setShowAuditPreview] = useState(false);
   const [auditEmails, setAuditEmails] = useState('');
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
+  const [emailResult, setEmailResult] = useState<{ success: boolean; message: string; suggestedSetup?: string } | null>(null);
   
   // Tab indicator
   const [activeSection, setActiveSection] = useState<'burn' | 'proof' | 'stakes' | 'audit' | 'constraints'>('burn');
+  const [countdownStr, setCountdownStr] = useState("02D : 14H : 32M : 00S");
+
+  useEffect(() => {
+    const updateCountdown = () => {
+      const now = new Date();
+      const currentDay = now.getDay();
+      const daysUntilSunday = (7 - currentDay) % 7;
+      const nextSunday = new Date();
+      nextSunday.setDate(now.getDate() + (daysUntilSunday === 0 && (now.getHours() > 23 || (now.getHours() === 23 && now.getMinutes() >= 59)) ? 7 : daysUntilSunday));
+      nextSunday.setHours(23, 59, 0, 0);
+
+      const diffMs = nextSunday.getTime() - now.getTime();
+      if (diffMs <= 0) {
+        setCountdownStr("00D : 00H : 00M : 00S");
+        return;
+      }
+
+      const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+      const hours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((diffMs % (1000 * 60)) / 1000);
+
+      const formatNum = (num: number) => String(num).padStart(2, '0');
+      setCountdownStr(`${formatNum(days)}D : ${formatNum(hours)}H : ${formatNum(minutes)}M : ${formatNum(seconds)}S`);
+    };
+
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Sync settings and vault items from Firestore
   useEffect(() => {
@@ -92,9 +141,18 @@ export const AccountabilityCockpit: React.FC<AccountabilityCockpitProps> = ({
     const setPath = doc(db, 'users', user.uid, 'settings', 'accountability');
     const unsubSettings = onSnapshot(setPath, (snap) => {
       if (snap.exists()) {
-        setSettings({ ...DEFAULT_ACCOUNTABILITY, ...snap.data() });
+        const data = snap.data();
+        setSettings({ 
+          ...DEFAULT_ACCOUNTABILITY, 
+          boardEmails: data.boardEmails || user?.email || 'mentor@example.com',
+          ...data 
+        });
       } else {
-        setDoc(setPath, DEFAULT_ACCOUNTABILITY);
+        const initialSettings = {
+          ...DEFAULT_ACCOUNTABILITY,
+          boardEmails: user?.email || 'mentor@example.com'
+        };
+        setDoc(setPath, initialSettings);
       }
     });
 
@@ -254,6 +312,51 @@ ${failedList.length > 0
 `;
   };
 
+  const handleSendDirectEmail = async (overrideTo?: string) => {
+    setIsSendingEmail(true);
+    setEmailResult(null);
+    const targetEmails = overrideTo || settings.boardEmails;
+
+    try {
+      const report = generateAuditReport();
+      const response = await fetch('/api/send-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          to: targetEmails,
+          subject: 'Weekly Accountability Auditing Log',
+          body: report
+        })
+      });
+
+      const data = await response.json();
+      if (response.ok && data.success) {
+        setEmailResult({
+          success: true,
+          message: data.message || "Email delivered successfully by direct app server!"
+        });
+        localStorage.setItem(`audit_sent_${currentWeekSunday}`, "true");
+        setAuditSentThisWeek(true);
+      } else {
+        setEmailResult({
+          success: false,
+          message: data.error || "Failed to dispatch email directly.",
+          suggestedSetup: data.suggestedSetup
+        });
+      }
+    } catch (error: any) {
+      console.error("Direct email dispatch failed:", error);
+      setEmailResult({
+        success: false,
+        message: error.message || "Could not connect to the app email API server."
+      });
+    } finally {
+      setIsSendingEmail(false);
+    }
+  };
+
   return (
     <div className="space-y-6 max-w-4xl mx-auto pb-12">
       
@@ -290,6 +393,186 @@ ${failedList.length > 0
           </span>
         </div>
       </div>
+
+      {/* Weekends/Sunday Audit Season Alert Banner */}
+      {(() => {
+        const todayDay = new Date().getDay();
+        const isAuditWindow = todayDay === 6 || todayDay === 0 || todayDay === 1; // Sat, Sun, Mon
+        const dayName = todayDay === 6 ? 'Saturday' : todayDay === 0 ? 'Sunday' : 'Monday';
+        if (!isAuditWindow) return null;
+        return (
+          <div className={cn(
+            "p-6 md:p-8 rounded-3xl flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-6 transition-all shadow-2xl relative overflow-hidden border",
+            auditSentThisWeek 
+              ? "bg-zinc-950 border-emerald-500/25 text-zinc-100"
+              : "bg-slate-950 border-amber-500/30 text-zinc-100 shadow-[0_0_20px_rgba(245,158,11,0.08)]"
+          )}>
+            {/* Subtle amber or green radial glow in background */}
+            <div className={cn(
+              "absolute top-0 left-0 w-96 h-96 pointer-events-none opacity-40 rounded-full -translate-x-1/4 -translate-y-1/4",
+              auditSentThisWeek
+                ? "bg-[radial-gradient(circle,rgba(16,185,129,0.1),transparent_70%)]"
+                : "bg-[radial-gradient(circle,rgba(245,158,11,0.12),transparent_70%)]"
+            )} />
+
+            <div className="flex flex-col sm:flex-row items-start gap-5 min-w-0 flex-1 relative z-10">
+              <div className="flex flex-col items-center gap-2.5 shrink-0 self-start sm:self-center">
+                <div className={cn(
+                  "p-3.5 rounded-2xl border relative overflow-hidden shadow-md shrink-0",
+                  auditSentThisWeek 
+                    ? "bg-emerald-950/40 text-emerald-400 border-emerald-500/25"
+                    : "bg-red-950/30 text-red-550 border-red-500/20"
+                )}>
+                  {/* Internal radial icon overlay */}
+                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(239,68,68,0.15),transparent_70%)] pointer-events-none" />
+                  {auditSentThisWeek ? <CheckCircle2 className="w-7 h-7 stroke-[2.5]" /> : <Mail className="w-7 h-7 stroke-[2.5]" />}
+                </div>
+                <span className={cn(
+                  "text-[9px] font-black tracking-widest uppercase px-2.5 py-1 rounded-md font-mono border",
+                  auditSentThisWeek
+                    ? "bg-emerald-950/60 text-emerald-400 border-emerald-800/40"
+                    : "bg-red-955/80 text-red-400 border-red-900/60 animate-pulse"
+                )}>
+                  {auditSentThisWeek ? "✓ COMPLETED" : "URGENT"}
+                </span>
+              </div>
+
+              <div className="min-w-0 flex-1">
+                <div>
+                  <h4 className="text-[10px] font-black tracking-[0.25em] text-zinc-500 uppercase">
+                    WEEKLY ACCOUNTABILITY
+                  </h4>
+                  <h2 className={cn(
+                    "text-2xl sm:text-3xl font-extrabold mt-1 tracking-tight leading-none uppercase",
+                    auditSentThisWeek 
+                      ? "text-emerald-400 drop-shadow-[0_0_8px_rgba(16,185,129,0.2)]" 
+                      : "text-red-500 dark:text-red-440 drop-shadow-[0_0_10px_rgba(239,68,68,0.3)]"
+                  )}>
+                    {auditSentThisWeek ? "AUDIT DISPATCHED" : "AUDIT DUE"}
+                  </h2>
+                </div>
+
+                <p className="text-xs text-zinc-400 mt-2.5 leading-relaxed max-w-2xl font-medium">
+                  {auditSentThisWeek 
+                    ? "Great job! Your weekly performance reports were successfully compiled and transmitted to your board of directors."
+                    : "Authorized directors require immediate submission of your weekly compilation data to finalize transfer and prevent behavioral leaks."}
+                </p>
+
+                {/* Structured user list with tiny avatars */}
+                {settings.boardEmails && (
+                  <div className="mt-4 space-y-2">
+                    <span className="text-[10px] font-black uppercase text-zinc-500 tracking-wider">
+                      Authorized Board Recipients:
+                    </span>
+                    <div className="flex flex-wrap gap-2">
+                      {settings.boardEmails.split(',').map(e => e.trim()).filter(Boolean).map((email, idx) => (
+                        <div key={idx} className="flex items-center gap-2 px-2.5 py-1 bg-zinc-900/80 border border-zinc-800/80 rounded-xl text-xs text-zinc-400 font-mono shadow-sm">
+                          <div className="w-4 h-4 rounded-full bg-slate-800 text-indigo-400 text-[10px] font-black flex items-center justify-center border border-indigo-500/10 uppercase shrink-0">
+                            {email[0] || '?'}
+                          </div>
+                          <span>{email}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {emailResult && (
+                  <div className={cn(
+                    "mt-4 p-4 rounded-2xl border text-xs leading-relaxed max-w-xl",
+                    emailResult.success 
+                      ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" 
+                      : "bg-red-500/10 border-red-500/20 text-red-400"
+                  )}>
+                    <div className="font-bold flex items-center gap-1.5">
+                      {emailResult.success ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertOctagon className="w-4 h-4 shrink-0" />}
+                      {emailResult.success ? "Success!" : "Direct Send Setup Assistant"}
+                    </div>
+                    <p className="mt-1 font-semibold">{emailResult.message}</p>
+                    {emailResult.suggestedSetup && (
+                      <div className="mt-2.5 p-2.5 bg-black/40 rounded-xl text-[10px] text-zinc-400 font-mono space-y-1">
+                        <p className="font-bold text-amber-500 uppercase">Interactive Server Keys Setup Required:</p>
+                        <p>{emailResult.suggestedSetup}</p>
+                        <p className="pt-1 text-[10px] text-zinc-500">Rest assured, you can send IMMEDIATELY by clicking the "Local Client" button to route through your device's email client.</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {!auditSentThisWeek && (
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full xl:w-auto shrink-0 justify-end relative z-10 mt-4 xl:mt-0">
+                {/* Primary Action (Direct Push) */}
+                <button
+                  type="button"
+                  onClick={() => handleSendDirectEmail()}
+                  disabled={isSendingEmail}
+                  className="px-5 py-3.5 bg-gradient-to-b from-indigo-600 via-indigo-700 to-indigo-850 hover:from-indigo-550 hover:via-indigo-650 hover:to-indigo-750 disabled:opacity-40 text-white font-black text-xs uppercase tracking-widest rounded-xl transition-all shadow-[inset_0_1px_0_rgba(255,255,255,0.15),0_4px_12px_rgba(99,102,241,0.25)] hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_6px_16px_rgba(99,102,241,0.35)] border border-indigo-500/30 hover:border-indigo-400/40 flex items-center justify-center gap-3 shrink-0"
+                >
+                  <Mail size={14} className="stroke-[3]" />
+                  <span>{isSendingEmail ? "SENDING DATA..." : "AUTO-SEND DATA BUNDLE"}</span>
+                  <span className="text-[8px] font-black px-1.5 py-0.5 bg-indigo-950/95 text-indigo-300 border border-indigo-500/20 rounded font-mono shrink-0">0 CLICKS</span>
+                </button>
+                
+                {/* Secondary Action (Local Client) */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const report = generateAuditReport();
+                    window.location.href = `mailto:${settings.boardEmails}?subject=Weekly%20Accountability%20Auditing%20Log&body=${encodeURIComponent(report)}`;
+                    localStorage.setItem(`audit_sent_${currentWeekSunday}`, 'true');
+                    setAuditSentThisWeek(true);
+                  }}
+                  className="px-5 py-3.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white border border-zinc-800 hover:border-zinc-700 font-extrabold text-xs uppercase tracking-widest rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 shrink-0"
+                >
+                  via Local Client
+                </button>
+
+                {/* Subtle Divider */}
+                <div className="hidden sm:block w-px h-6 bg-zinc-800/80 mx-1 shrink-0" />
+
+                {/* Ghost Action (Mark Sent) */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    localStorage.setItem(`audit_sent_${currentWeekSunday}`, 'true');
+                    setAuditSentThisWeek(true);
+                  }}
+                  className="px-4 py-3 bg-transparent hover:bg-zinc-900/50 text-zinc-500 hover:text-zinc-200 font-extrabold text-xs uppercase tracking-widest rounded-xl transition-all shrink-0 text-center"
+                >
+                  Mark Sent
+                </button>
+              </div>
+            )}
+
+            {auditSentThisWeek && (
+              <button
+                type="button"
+                onClick={() => {
+                  localStorage.removeItem(`audit_sent_${currentWeekSunday}`);
+                  setAuditSentThisWeek(false);
+                }}
+                className="text-[10px] text-zinc-500 hover:text-red-400 font-black uppercase tracking-widest transition-all shrink-0 mt-2 xl:mt-0 relative z-10"
+              >
+                Reset Status
+              </button>
+            )}
+
+            {/* Subtle accountability streak decay meter at the very bottom edge */}
+            <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-zinc-900 pointer-events-none">
+              <div 
+                className={cn(
+                  "h-full transition-all duration-700 ease-out",
+                  auditSentThisWeek 
+                    ? "bg-gradient-to-r from-emerald-500 to-teal-400 w-full"
+                    : "bg-gradient-to-r from-red-600 via-amber-500 to-emerald-500 w-3/4"
+                )} 
+              />
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Mode selectors bento navigation */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 bg-slate-50 dark:bg-zinc-900 p-1.5 rounded-2xl border border-slate-100 dark:border-zinc-800">
@@ -795,96 +1078,129 @@ ${failedList.length > 0
 
         {/* ============ 4. BOARD OF DIRECTORS AUDIT ============ */}
         {activeSection === 'audit' && (
-          <div className="space-y-6">
-            <div className="flex flex-col md:flex-row md:items-baseline justify-between gap-2 border-b border-slate-105 dark:border-zinc-800/80 pb-4">
-              <div>
-                <h3 className="text-xl font-bold text-slate-905 dark:text-white flex items-center gap-2">
-                  <Users className="text-indigo-600 dark:text-indigo-400" size={20} />
-                  The "Board of Directors" Audit
-                </h3>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  Appoint respected mentors, peers, or contacts. Generate an automatic weekly text draft and email reports to reduce evasion.
-                </p>
+          <div id="board-audit-tab" className="bg-gray-900 p-6 md:p-8 rounded-3xl border border-gray-800 text-gray-100 space-y-6 animate-in fade-in zoom-in-95 duration-200">
+            
+            {/* 1. The Impending Deadline Banner (Top, Full Width) */}
+            <div className="bg-gray-950/80 border border-amber-500/40 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-lg">
+              <div className="flex items-center gap-3">
+                <span className="relative flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
+                </span>
+                <span className="text-xs font-black tracking-widest uppercase text-amber-500 font-mono">
+                  WEEK 12 AUDIT: PENDING DISPATCH
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Clock className="w-4 h-4 text-amber-500" />
+                <span className="text-sm font-black font-mono tracking-wider text-amber-400">
+                  T-MINUS {countdownStr}
+                </span>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+            {/* 2. Main Content Grid (2 Columns: 60% / 40%) */}
+            <div className="grid grid-cols-1 lg:grid-cols-10 gap-6 items-start">
               
-              {/* Setup Board Address */}
-              <div className="space-y-4 p-5 bg-slate-50/60 dark:bg-zinc-950/20 border border-slate-100 dark:border-zinc-850 rounded-2xl">
-                <h4 className="text-xs uppercase tracking-widest font-black text-indigo-500">Board Membership</h4>
-                
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-600 dark:text-zinc-400 block">
-                    Auditor Email Addresses (1 to 3, comma separated)
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={settings.boardEmails}
-                    onChange={(e) => handleSaveSettings({ boardEmails: e.target.value })}
-                    placeholder="e.g. mentor@example.com, peer@example.com"
-                    className="w-full text-xs p-3 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl font-bold dark:text-white"
-                  />
-                </div>
-
-                <p className="text-[10px] text-slate-400 leading-relaxed font-semibold">
-                  📧 Reports are scheduled to generate every **Sunday at 23:59 UTC**. Mentors will inspect your compliance score, frog successes, failure post-mortems, and proof attachments.
-                </p>
-
-                <button
-                  type="button"
-                  onClick={() => setShowAuditPreview(true)}
-                  className="w-full py-3 bg-white hover:bg-slate-50 text-indigo-650 dark:bg-zinc-900 dark:hover:bg-zinc-800 border border-indigo-200 dark:border-zinc-700 text-indigo-600 dark:text-indigo-400 font-extrabold text-xs uppercase tracking-widest rounded-xl transition-all shadow-sm flex items-center justify-center gap-2"
-                >
-                  <Mail className="w-4 h-4" />
-                  Preview Auditor weekly Report
-                </button>
-              </div>
-
-              {/* Integrity Reminder and Guidelines */}
-              <div className="p-5 bg-indigo-50/20 border border-dashed border-indigo-150 rounded-2xl space-y-4">
-                <h4 className="text-xs font-black uppercase text-indigo-650 dark:text-indigo-400 flex items-center gap-1">
-                  <Sparkles size={13} className="text-amber-500 fill-amber-500 animate-bounce" /> Behavioral Evasion Shields
-                </h4>
-                <p className="text-xs text-slate-500 dark:text-zinc-400 leading-relaxed">
-                  We easily lie to ourselves in dark corners, but looking lazy or erratic in front of high-reputation mentors triggers deep societal compliance drives. 
-                </p>
-                <div className="space-y-2 text-xs">
-                  <p className="font-bold text-slate-705 dark:text-zinc-300">Suggested board format:</p>
-                  <ul className="list-disc list-inside space-y-1 pl-1 text-slate-400 dark:text-zinc-500 font-medium">
-                    <li>1 High-discipline peer study partner</li>
-                    <li>1 Mentor / Instructor whose time you value</li>
-                    <li>1 Highly critical stakeholder</li>
-                  </ul>
-                </div>
-              </div>
-
-            </div>
-
-            {/* EXPANDABLE PREVIEW POPUP MODAL */}
-            {showAuditPreview && (
-              <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-900/50 dark:bg-black/80 backdrop-blur-sm">
-                <div className="bg-white dark:bg-zinc-900 rounded-3xl p-6 max-w-xl w-full border border-slate-100 dark:border-zinc-800 shadow-2xl flex flex-col max-h-[80vh] overflow-hidden my-auto animate-in zoom-in-95 duration-200">
-                  <div className="flex items-center justify-between border-b pb-3 mb-4 shrink-0">
-                    <h4 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-1.5ClassName">
-                      <FileText size={16} className="text-indigo-600" />
-                      Weekly Report Preview
-                    </h4>
-                    <button 
-                      onClick={() => setShowAuditPreview(false)}
-                      className="p-1 hover:bg-slate-50 dark:hover:bg-zinc-855 rounded text-slate-400 hover:text-slate-650"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
+              {/* Column A (Left - 60%) */}
+              <div className="lg:col-span-6 space-y-4">
+                <div className="bg-gray-800/80 border border-gray-700/60 rounded-3xl p-6 space-y-6">
+                  <div>
+                    <h3 className="text-lg font-bold text-gray-100 flex items-center gap-2 tracking-tight">
+                      <FileText className="text-indigo-405" size={18} />
+                      Live Audit Draft
+                    </h3>
+                    <p className="text-[11px] text-gray-400 mt-0.5 font-mono">
+                      What your Board will see on Sunday at 23:59
+                    </p>
                   </div>
 
-                  <div className="text-xs font-mono bg-slate-50 dark:bg-zinc-950 p-4 rounded-xl overflow-y-auto flex-1 text-slate-700 dark:text-zinc-350 pr-2 min-h-0">
-                    <pre className="whitespace-pre-wrap leading-relaxed">{generateAuditReport()}</pre>
+                  {/* High Stakes Harsh Reality Check Mock Metrics */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pb-2 text-xs">
+                    <div className="p-3.5 bg-gray-900/60 border border-gray-700/40 rounded-xl flex items-center justify-between">
+                      <span className="font-medium text-gray-300">Burn Rate Compliance:</span>
+                      <span className="font-bold text-red-400 flex items-center gap-1 font-mono">
+                        🔴 14.2 hours deficit
+                      </span>
+                    </div>
+                    <div className="p-3.5 bg-gray-900/60 border border-gray-700/40 rounded-xl flex items-center justify-between">
+                      <span className="font-medium text-gray-300">High-Stakes Frogs:</span>
+                      <span className="font-bold text-gray-100 font-mono">
+                        Conquered 4/7
+                      </span>
+                    </div>
+                    <div className="p-3.5 bg-gray-900/60 border border-gray-700/40 rounded-xl flex items-center justify-between">
+                      <span className="font-medium text-gray-300">Financial Escrow:</span>
+                      <span className="font-bold text-red-400 font-mono">
+                        Forfeited $20.00
+                      </span>
+                    </div>
+                    <div className="p-3.5 bg-gray-900/60 border border-gray-700/40 rounded-xl flex items-center justify-between">
+                      <span className="font-medium text-gray-300">Proof Vault Integrity:</span>
+                      <span className="font-bold text-amber-400 flex items-center gap-1 font-mono">
+                        🟡 Missing 1 receipt
+                      </span>
+                    </div>
                   </div>
 
-                  <div className="mt-4 pt-3 border-t flex gap-3 shrink-0">
+                  {/* Scrollable Live Markdown Document Draft Panel */}
+                  <div className="space-y-1">
+                    <span className="text-[10px] uppercase font-black tracking-widest text-gray-400 font-mono">
+                      Generated Report Content
+                    </span>
+                    <div className="text-[11px] font-mono bg-gray-950 p-4 rounded-xl overflow-y-auto text-gray-300 border border-gray-800 max-h-[180px] leading-relaxed select-all">
+                      <pre className="whitespace-pre-wrap">{generateAuditReport()}</pre>
+                    </div>
+                  </div>
+
+                  {/* Feedback on dispatch */}
+                  {emailResult && (
+                    <div className={cn(
+                      "p-3.5 rounded-xl border text-xs leading-relaxed",
+                      emailResult.success 
+                        ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" 
+                        : "bg-red-500/10 border-red-500/20 text-red-400"
+                    )}>
+                      <div className="font-bold flex items-center gap-1.5 mb-1">
+                        {emailResult.success ? <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" /> : <AlertOctagon className="w-4 h-4 shrink-0 text-red-400" />}
+                        {emailResult.success ? "Early Dispatch Transmitted!" : "Auditor Dispatch Assist"}
+                      </div>
+                      <p className="font-medium text-[11px]">{emailResult.message}</p>
+                      {emailResult.suggestedSetup && (
+                        <div className="mt-2 p-2 bg-gray-950 rounded-lg text-[9px] text-gray-400 font-mono leading-normal">
+                          {emailResult.suggestedSetup}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Force Early Dispatch Action Button */}
+                  <div className="flex flex-col sm:flex-row gap-2 pt-2">
                     <button
+                      type="button"
+                      disabled={isSendingEmail}
+                      onClick={() => handleSendDirectEmail()}
+                      className="flex-1 py-3 bg-red-650 hover:bg-red-600 active:bg-red-700 disabled:opacity-40 text-white font-black text-xs uppercase tracking-widest rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 shrink-0"
+                    >
+                      <Mail size={14} className="stroke-[3]" />
+                      {isSendingEmail ? "Dispatching..." : "Force Early Dispatch"}
+                    </button>
+                    
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const report = generateAuditReport();
+                        window.location.href = `mailto:${settings.boardEmails}?subject=Weekly%20Accountability%20Auditing%20Log&body=${encodeURIComponent(report)}`;
+                        localStorage.setItem(`audit_sent_${currentWeekSunday}`, 'true');
+                        setAuditSentThisWeek(true);
+                      }}
+                      className="py-3 px-4 bg-gray-750 hover:bg-gray-700 hover:text-white transition-all text-gray-350 font-bold text-xs uppercase tracking-wider rounded-xl flex items-center justify-center gap-1.5 shrink-0"
+                    >
+                      via Local Client
+                    </button>
+
+                    <button
+                      type="button"
                       onClick={() => {
                         const report = generateAuditReport();
                         const blob = new Blob([report], { type: 'text/markdown;charset=utf-8;' });
@@ -896,22 +1212,87 @@ ${failedList.length > 0
                         link.click();
                         document.body.removeChild(link);
                       }}
-                      className="flex-1 py-2.5 bg-slate-50 dark:bg-zinc-800 hover:bg-slate-100 dark:hover:bg-zinc-700 text-slate-700 dark:text-zinc-300 font-bold text-xs uppercase tracking-wide rounded-xl border border-slate-205 transition-all text-center"
+                      className="p-3 bg-gray-750 hover:bg-gray-700 hover:text-white transition-all text-gray-350 font-bold text-xs uppercase tracking-wider rounded-xl flex items-center justify-center shrink-0"
+                      title="Download Markdown Report"
                     >
-                      Export Report (.md)
-                    </button>
-                    <button
-                      onClick={() => {
-                        window.location.href = `mailto:${settings.boardEmails}?subject=Weekly%20Accountability%20Auditing%20Log&body=${encodeURIComponent(generateAuditReport())}`;
-                      }}
-                      className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs uppercase tracking-wide rounded-xl transition-all flex items-center justify-center gap-1.5"
-                    >
-                      <Mail size={13} /> Send Email via Local Client
+                      <Download size={14} />
                     </button>
                   </div>
                 </div>
               </div>
-            )}
+
+              {/* Column B (Right - 40%) */}
+              <div className="lg:col-span-4 space-y-4">
+                
+                {/* Board Roster Configuration */}
+                <div className="bg-gray-800/80 border border-gray-700/60 rounded-3xl p-6 space-y-4">
+                  <div>
+                    <h3 className="text-base font-bold text-gray-100 flex items-center gap-2">
+                      <Users className="text-gray-400" size={16} />
+                      Stakeholder Roster
+                    </h3>
+                    <p className="text-[11px] text-gray-400 mt-0.5">
+                      Configure your board of directors
+                    </p>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black uppercase text-gray-405 tracking-wider">
+                      Auditor Email Addresses (comma separated)
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={settings.boardEmails}
+                      onChange={(e) => handleSaveSettings({ boardEmails: e.target.value })}
+                      placeholder="mentor@example.com, peer@example.com"
+                      className="w-full text-xs p-3 bg-gray-955 border border-gray-700 rounded-xl font-bold font-mono text-zinc-100 focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+
+                  {/* Engagement Ledger with mock read statuses */}
+                  <div className="space-y-2 pt-2">
+                    <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">
+                      Engagement Ledger
+                    </span>
+                    <div className="space-y-2 text-xs">
+                      <div className="p-3 bg-gray-900/60 border border-gray-700/30 rounded-xl flex justify-between items-center">
+                        <span className="font-mono text-gray-200">Rishabh (Peer)</span>
+                        <span className="text-[10px] font-bold text-emerald-400 flex items-center gap-1">
+                          🟢 Reviewed last week
+                        </span>
+                      </div>
+                      <div className="p-3 bg-gray-900/60 border border-gray-700/30 rounded-xl flex justify-between items-center">
+                        <span className="font-mono text-gray-200">Dr. Sharma (Mentor)</span>
+                        <span className="text-[10px] font-bold text-red-500 flex items-center gap-1">
+                          🔴 Did not open last week
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* subtle tooltip/text explanation */}
+                  <div className="p-3 bg-gray-900/40 border border-gray-800 rounded-xl">
+                    <p className="text-[10px] text-gray-400 leading-normal font-medium">
+                      ⚠️ Mentors who ignore 2 consecutive reports are automatically flagged for removal.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Behavioral Help card inside board section */}
+                <div className="p-5 bg-indigo-950/20 border border-dashed border-indigo-500/20 rounded-2xl space-y-3">
+                  <h4 className="text-xs font-black uppercase text-indigo-300 flex items-center gap-1">
+                    <Sparkles size={11} className="text-amber-400 animate-bounce" /> Behavioral Evasion Shields
+                  </h4>
+                  <p className="text-[11px] text-gray-450 leading-relaxed">
+                    We easily lie to ourselves in dark corners, but looking lazy or erratic in front of high-reputation mentors triggers deep societal compliance drives.
+                  </p>
+                </div>
+
+              </div>
+
+            </div>
+
           </div>
         )}
 
