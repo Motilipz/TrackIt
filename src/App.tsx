@@ -10,7 +10,8 @@ import {
   Calendar, Clock, BookOpen, BarChart3, History, Download, 
   Plus, Trash2, LogOut, LayoutDashboard, ChevronLeft, ChevronRight,
   Target, Award, TrendingUp, Settings as SettingsIcon, Save, RotateCcw, X, Star, AlertTriangle, Maximize2,
-  Sun, Moon, Monitor, Menu, FileJson, Upload, FileUp, Gauge, ListTodo, CheckCircle2, Circle, Play, Shield
+  Sun, Moon, Monitor, Menu, FileJson, Upload, FileUp, Gauge, ListTodo, CheckCircle2, Circle, Play, Shield,
+  Trophy
 } from 'lucide-react';
 import { format, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay, subDays, startOfMonth, endOfMonth, subMonths, parseISO, isWithinInterval, addHours } from 'date-fns';
 import { clsx, type ClassValue } from 'clsx';
@@ -25,6 +26,7 @@ import { TimerCard } from './components/TimerCard';
 import { ReadingVelocityEngine } from './components/ReadingVelocityEngine';
 import { ActionPlanView } from './components/ActionPlanView';
 import { AccountabilityCockpit } from './components/AccountabilityCockpit';
+import { ArenaBoard } from './components/ArenaBoard';
 import { StudyLog, ReadingLog, DailyTask } from './types';
 
 const DOMAINS = ['Philosophy', 'Economics', 'Sociology', 'Science', 'Literature', 'History', 'Technology', 'Other'];
@@ -266,7 +268,7 @@ function AppContent() {
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deleteConfirmType, setDeleteConfirmType] = useState<'Study' | 'Reading' | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'log' | 'history' | 'timer' | 'reading' | 'settings' | 'action-plan' | 'accountability'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'log' | 'history' | 'timer' | 'reading' | 'settings' | 'action-plan' | 'accountability' | 'arena'>('dashboard');
   
   // Daily Tasks and State Handoff
   const [dailyTasks, setDailyTasks] = useState<DailyTask[]>([]);
@@ -987,6 +989,39 @@ function AppContent() {
     readingTrendData
   } = analytics;
 
+  // Sync user active stats to public arena standings database in real-time
+  useEffect(() => {
+    if (!user) return;
+
+    const totalHoursNum = parseFloat(stats.totalHours) || 0;
+    const completedTasksCount = dailyTasks.filter(t => t.status === 'done').length;
+    const highestWpm = readingLogs.length > 0 ? Math.max(...readingLogs.map(l => l.wpm || 0)) : 0;
+
+    const syncArena = async () => {
+      try {
+        const rankingRef = doc(db, 'arena_rankings', user.uid);
+        await setDoc(rankingRef, {
+          userId: user.uid,
+          displayName: user.displayName || 'Anonymous Candidate',
+          photoURL: user.photoURL || 'https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y',
+          totalHours: totalHoursNum,
+          streak: streak,
+          tasksCompleted: completedTasksCount,
+          wpm: highestWpm,
+          lastActive: Timestamp.now()
+        });
+      } catch (err) {
+        console.error("Failed to sync arena ranking:", err);
+      }
+    };
+
+    const timer = setTimeout(() => {
+      syncArena();
+    }, 2000);
+
+    return () => clearTimeout(timer);
+  }, [user, stats.totalHours, streak, dailyTasks, readingLogs]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-50 dark:bg-zinc-950 flex items-center justify-center transition-colors duration-300">
@@ -1160,6 +1195,18 @@ function AppContent() {
           >
             <Shield className="w-5 h-5 shrink-0" />
             {!isSidebarCompact && <span className="truncate">Accountability Cockpit</span>}
+          </button>
+          <button
+            onClick={() => setActiveTab('arena')}
+            className={cn(
+              "w-full flex items-center rounded-xl font-medium transition-all duration-200",
+              isSidebarCompact ? "justify-center p-3" : "gap-3 px-4 py-3",
+              activeTab === 'arena' ? "bg-amber-50 dark:bg-amber-955/20 text-amber-600 dark:text-amber-400 font-bold border-l-2 border-amber-500 rounded-l-none" : "text-slate-600 dark:text-zinc-400 hover:bg-slate-50 dark:hover:bg-zinc-800"
+            )}
+            title={isSidebarCompact ? "Preparation Arena" : undefined}
+          >
+            <Trophy className="w-5 h-5 shrink-0 text-amber-500" />
+            {!isSidebarCompact && <span className="truncate">Preparation Arena</span>}
           </button>
           <button
             onClick={() => setActiveTab('settings')}
@@ -1854,6 +1901,18 @@ function AppContent() {
               dailyTasks={dailyTasks}
               logs={logs}
             />
+          )}
+
+          {activeTab === 'arena' && (
+            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <ArenaBoard
+                user={user}
+                totalHours={parseFloat(stats.totalHours) || 0}
+                streak={streak}
+                tasksCompleted={dailyTasks.filter(t => t.status === 'done').length}
+                wpm={readingLogs.length > 0 ? Math.max(...readingLogs.map(l => l.wpm || 0)) : 0}
+              />
+            </div>
           )}
 
           {activeTab === 'settings' && (

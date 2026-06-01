@@ -401,73 +401,46 @@ ${failedList.length > 0
         const dayName = todayDay === 6 ? 'Saturday' : todayDay === 0 ? 'Sunday' : 'Monday';
         if (!isAuditWindow) return null;
         return (
-          <div className={cn(
-            "p-6 md:p-8 rounded-3xl flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-6 transition-all shadow-2xl relative overflow-hidden border",
-            auditSentThisWeek 
-              ? "bg-zinc-950 border-emerald-500/25 text-zinc-100"
-              : "bg-slate-950 border-amber-500/30 text-zinc-100 shadow-[0_0_20px_rgba(245,158,11,0.08)]"
-          )}>
-            {/* Subtle amber or green radial glow in background */}
-            <div className={cn(
-              "absolute top-0 left-0 w-96 h-96 pointer-events-none opacity-40 rounded-full -translate-x-1/4 -translate-y-1/4",
-              auditSentThisWeek
-                ? "bg-[radial-gradient(circle,rgba(16,185,129,0.1),transparent_70%)]"
-                : "bg-[radial-gradient(circle,rgba(245,158,11,0.12),transparent_70%)]"
-            )} />
-
-            <div className="flex flex-col sm:flex-row items-start gap-5 min-w-0 flex-1 relative z-10">
-              <div className="flex flex-col items-center gap-2.5 shrink-0 self-start sm:self-center">
-                <div className={cn(
-                  "p-3.5 rounded-2xl border relative overflow-hidden shadow-md shrink-0",
-                  auditSentThisWeek 
-                    ? "bg-emerald-950/40 text-emerald-400 border-emerald-500/25"
-                    : "bg-red-950/30 text-red-550 border-red-500/20"
-                )}>
-                  {/* Internal radial icon overlay */}
-                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(239,68,68,0.15),transparent_70%)] pointer-events-none" />
-                  {auditSentThisWeek ? <CheckCircle2 className="w-7 h-7 stroke-[2.5]" /> : <Mail className="w-7 h-7 stroke-[2.5]" />}
-                </div>
-                <span className={cn(
-                  "text-[9px] font-black tracking-widest uppercase px-2.5 py-1 rounded-md font-mono border",
-                  auditSentThisWeek
-                    ? "bg-emerald-950/60 text-emerald-400 border-emerald-800/40"
-                    : "bg-red-955/80 text-red-400 border-red-900/60 animate-pulse"
-                )}>
-                  {auditSentThisWeek ? "✓ COMPLETED" : "URGENT"}
-                </span>
+          <div className="p-5 md:p-6 border border-slate-205 dark:border-zinc-800/80 rounded-2xl bg-white dark:bg-zinc-900/50 flex flex-col md:flex-row items-start md:items-center justify-between gap-6 transition-all shadow-sm relative overflow-hidden">
+            <div className="flex items-start gap-4 min-w-0 flex-1">
+              <div className={cn(
+                "p-3 rounded-xl border shrink-0",
+                auditSentThisWeek 
+                  ? "bg-emerald-500/10 text-emerald-500 dark:text-emerald-400 border-emerald-500/20"
+                  : "bg-red-500/10 text-red-500 dark:text-red-400 border-red-500/20"
+              )}>
+                {auditSentThisWeek ? <CheckCircle2 className="w-5 h-5" /> : <Mail className="w-5 h-5" />}
               </div>
-
               <div className="min-w-0 flex-1">
-                <div>
-                  <h4 className="text-[10px] font-black tracking-[0.25em] text-zinc-500 uppercase">
-                    WEEKLY ACCOUNTABILITY
-                  </h4>
-                  <h2 className={cn(
-                    "text-2xl sm:text-3xl font-extrabold mt-1 tracking-tight leading-none uppercase",
-                    auditSentThisWeek 
-                      ? "text-emerald-400 drop-shadow-[0_0_8px_rgba(16,185,129,0.2)]" 
-                      : "text-red-500 dark:text-red-440 drop-shadow-[0_0_10px_rgba(239,68,68,0.3)]"
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className={cn(
+                    "px-2 py-0.5 rounded-md text-[10px] font-bold font-mono tracking-wide",
+                    auditSentThisWeek
+                      ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                      : "bg-rose-500/10 text-rose-600 dark:text-rose-455"
                   )}>
-                    {auditSentThisWeek ? "AUDIT DISPATCHED" : "AUDIT DUE"}
-                  </h2>
+                    {auditSentThisWeek ? "✓ Audit Completed" : `Urgent: Audit Season (${dayName})`}
+                  </span>
                 </div>
-
-                <p className="text-xs text-zinc-400 mt-2.5 leading-relaxed max-w-2xl font-medium">
+                <h3 className="text-base font-semibold text-slate-900 dark:text-zinc-105 mt-1 tracking-tight">
+                  {auditSentThisWeek ? "Weekly accountability audit dispatched" : "Weekly accountability audit due"}
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-zinc-400 mt-1.5 leading-relaxed max-w-2xl font-medium">
                   {auditSentThisWeek 
                     ? "Great job! Your weekly performance reports were successfully compiled and transmitted to your board of directors."
                     : "Authorized directors require immediate submission of your weekly compilation data to finalize transfer and prevent behavioral leaks."}
                 </p>
 
-                {/* Structured user list with tiny avatars */}
+                {/* Structured list of authorized board recipients styled in blue */}
                 {settings.boardEmails && (
-                  <div className="mt-4 space-y-2">
-                    <span className="text-[10px] font-black uppercase text-zinc-500 tracking-wider">
-                      Authorized Board Recipients:
+                  <div className="mt-3 flex flex-wrap gap-1.5 items-center">
+                    <span className="text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-wider">
+                      Recipients:
                     </span>
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-wrap gap-1.5">
                       {settings.boardEmails.split(',').map(e => e.trim()).filter(Boolean).map((email, idx) => (
-                        <div key={idx} className="flex items-center gap-2 px-2.5 py-1 bg-zinc-900/80 border border-zinc-800/80 rounded-xl text-xs text-zinc-400 font-mono shadow-sm">
-                          <div className="w-4 h-4 rounded-full bg-slate-800 text-indigo-400 text-[10px] font-black flex items-center justify-center border border-indigo-500/10 uppercase shrink-0">
+                        <div key={idx} className="flex items-center gap-1.5 px-2 py-0.5 bg-sky-50 dark:bg-sky-950/15 border border-sky-100/70 dark:border-sky-900/30 rounded-md text-[11px] text-sky-600 dark:text-sky-400 font-mono">
+                          <div className="w-3.5 h-3.5 rounded-full bg-sky-100 dark:bg-sky-900/60 text-sky-700 dark:text-sky-300 text-[9px] font-bold flex items-center justify-center shrink-0 uppercase">
                             {email[0] || '?'}
                           </div>
                           <span>{email}</span>
@@ -479,10 +452,10 @@ ${failedList.length > 0
 
                 {emailResult && (
                   <div className={cn(
-                    "mt-4 p-4 rounded-2xl border text-xs leading-relaxed max-w-xl",
+                    "mt-4 p-4 rounded-xl border text-xs leading-relaxed max-w-xl",
                     emailResult.success 
-                      ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" 
-                      : "bg-red-500/10 border-red-500/20 text-red-400"
+                      ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400" 
+                      : "bg-rose-500/10 border-rose-500/20 text-rose-600 dark:text-rose-400"
                   )}>
                     <div className="font-bold flex items-center gap-1.5">
                       {emailResult.success ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertOctagon className="w-4 h-4 shrink-0" />}
@@ -490,10 +463,10 @@ ${failedList.length > 0
                     </div>
                     <p className="mt-1 font-semibold">{emailResult.message}</p>
                     {emailResult.suggestedSetup && (
-                      <div className="mt-2.5 p-2.5 bg-black/40 rounded-xl text-[10px] text-zinc-400 font-mono space-y-1">
-                        <p className="font-bold text-amber-500 uppercase">Interactive Server Keys Setup Required:</p>
+                      <div className="mt-2.5 p-2.5 bg-slate-50 dark:bg-black/20 rounded-lg text-[10px] text-slate-500 dark:text-zinc-400 font-mono space-y-1">
+                        <p className="font-bold text-amber-600 dark:text-amber-500 uppercase">Interactive Server Keys Setup Required:</p>
                         <p>{emailResult.suggestedSetup}</p>
-                        <p className="pt-1 text-[10px] text-zinc-500">Rest assured, you can send IMMEDIATELY by clicking the "Local Client" button to route through your device's email client.</p>
+                        <p className="pt-1 text-[10px] text-slate-400">Rest assured, you can send IMMEDIATELY by clicking the "Local Client" button to route through your device's email client.</p>
                       </div>
                     )}
                   </div>
@@ -502,17 +475,16 @@ ${failedList.length > 0
             </div>
 
             {!auditSentThisWeek && (
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full xl:w-auto shrink-0 justify-end relative z-10 mt-4 xl:mt-0">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full md:w-auto shrink-0 justify-end mt-4 md:mt-0">
                 {/* Primary Action (Direct Push) */}
                 <button
                   type="button"
                   onClick={() => handleSendDirectEmail()}
                   disabled={isSendingEmail}
-                  className="px-5 py-3.5 bg-gradient-to-b from-indigo-600 via-indigo-700 to-indigo-850 hover:from-indigo-550 hover:via-indigo-650 hover:to-indigo-750 disabled:opacity-40 text-white font-black text-xs uppercase tracking-widest rounded-xl transition-all shadow-[inset_0_1px_0_rgba(255,255,255,0.15),0_4px_12px_rgba(99,102,241,0.25)] hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_6px_16px_rgba(99,102,241,0.35)] border border-indigo-500/30 hover:border-indigo-400/40 flex items-center justify-center gap-3 shrink-0"
+                  className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-850 disabled:opacity-50 text-white font-semibold text-xs rounded-xl transition-all shadow-sm flex items-center justify-center gap-1.5 shrink-0"
                 >
-                  <Mail size={14} className="stroke-[3]" />
-                  <span>{isSendingEmail ? "SENDING DATA..." : "AUTO-SEND DATA BUNDLE"}</span>
-                  <span className="text-[8px] font-black px-1.5 py-0.5 bg-indigo-950/95 text-indigo-300 border border-indigo-500/20 rounded font-mono shrink-0">0 CLICKS</span>
+                  <Mail size={13} />
+                  {isSendingEmail ? "Pushing..." : "Direct Push"}
                 </button>
                 
                 {/* Secondary Action (Local Client) */}
@@ -524,13 +496,14 @@ ${failedList.length > 0
                     localStorage.setItem(`audit_sent_${currentWeekSunday}`, 'true');
                     setAuditSentThisWeek(true);
                   }}
-                  className="px-5 py-3.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white border border-zinc-800 hover:border-zinc-700 font-extrabold text-xs uppercase tracking-widest rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 shrink-0"
+                  className="px-4 py-2.5 bg-white dark:bg-zinc-900 hover:bg-slate-50 dark:hover:bg-zinc-800 text-slate-700 dark:text-zinc-300 border border-slate-200 dark:border-zinc-800 font-semibold text-xs rounded-xl transition-all shadow-sm flex items-center justify-center gap-1.5 shrink-0"
                 >
-                  via Local Client
+                  <ExternalLink size={13} className="text-slate-400" />
+                  Local Client
                 </button>
 
                 {/* Subtle Divider */}
-                <div className="hidden sm:block w-px h-6 bg-zinc-800/80 mx-1 shrink-0" />
+                <div className="hidden sm:block w-px h-6 bg-slate-200 dark:bg-zinc-800 mx-1 shrink-0" />
 
                 {/* Ghost Action (Mark Sent) */}
                 <button
@@ -539,7 +512,7 @@ ${failedList.length > 0
                     localStorage.setItem(`audit_sent_${currentWeekSunday}`, 'true');
                     setAuditSentThisWeek(true);
                   }}
-                  className="px-4 py-3 bg-transparent hover:bg-zinc-900/50 text-zinc-500 hover:text-zinc-200 font-extrabold text-xs uppercase tracking-widest rounded-xl transition-all shrink-0 text-center"
+                  className="px-3.5 py-2.5 text-slate-400 hover:text-slate-605 dark:text-zinc-500 dark:hover:text-zinc-300 font-semibold text-xs rounded-xl transition-all hover:bg-slate-50 dark:hover:bg-zinc-800/20 text-center shrink-0"
                 >
                   Mark Sent
                 </button>
@@ -553,23 +526,11 @@ ${failedList.length > 0
                   localStorage.removeItem(`audit_sent_${currentWeekSunday}`);
                   setAuditSentThisWeek(false);
                 }}
-                className="text-[10px] text-zinc-500 hover:text-red-400 font-black uppercase tracking-widest transition-all shrink-0 mt-2 xl:mt-0 relative z-10"
+                className="text-[10px] text-slate-400 hover:text-rose-500 font-bold uppercase transition-all shrink-0 mt-2 md:mt-0"
               >
                 Reset Status
               </button>
             )}
-
-            {/* Subtle accountability streak decay meter at the very bottom edge */}
-            <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-zinc-900 pointer-events-none">
-              <div 
-                className={cn(
-                  "h-full transition-all duration-700 ease-out",
-                  auditSentThisWeek 
-                    ? "bg-gradient-to-r from-emerald-500 to-teal-400 w-full"
-                    : "bg-gradient-to-r from-red-600 via-amber-500 to-emerald-500 w-3/4"
-                )} 
-              />
-            </div>
           </div>
         );
       })()}

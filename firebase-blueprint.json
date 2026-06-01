@@ -101,6 +101,22 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["taskTitle", "category", "proofNotes", "imageFileName", "fileLink", "createdAt"]
+    },
+    "ArenaRanking": {
+      "title": "ArenaRanking",
+      "description": "Multi-user engagement data for the public competitive leaderboard.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "totalHours": { "type": "number" },
+        "streak": { "type": "number" },
+        "tasksCompleted": { "type": "number" },
+        "wpm": { "type": "number" },
+        "lastActive": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "displayName", "photoURL", "totalHours", "streak", "tasksCompleted", "wpm", "lastActive"]
     }
   },
   "firestore": {
@@ -127,6 +143,10 @@
     "/users/{userId}/proofVault/{proofId}": {
       "schema": "ProofVaultItem",
       "description": "Evidence uploaded of messy scratchpad work."
+    },
+    "/arena_rankings/{userId}": {
+      "schema": "ArenaRanking",
+      "description": "Public multi-user competitive metrics on the Arena Board."
     }
   }
 }

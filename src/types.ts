@@ -70,3 +70,14 @@ export interface DailyTask {
   order?: number;
   createdAt: Date;
 }
+
+export interface ArenaRanking {
+  userId: string;
+  displayName: string;
+  photoURL: string;
+  totalHours: number;
+  streak: number;
+  tasksCompleted: number;
+  wpm: number;
+  lastActive: Date;
+}
