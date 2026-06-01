@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Trophy, Zap, Award, Sparkles, TrendingUp, Gauge, Clock, Flame, CheckCircle2, MessageSquare, Search, Crown, ArrowUp, ShieldAlert, ZapOff } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { db, collection, query, onSnapshot, doc, setDoc, Timestamp } from '../firebase';
-import { ArenaRanking } from '../types';
+import { db, collection, query, onSnapshot, doc, setDoc, Timestamp, where, orderBy } from '../firebase';
+import { ArenaRanking, StudyLog } from '../types';
 import { formatDistanceToNow } from 'date-fns';
+import { getDirectDriveImageUrl } from '../utils';
 
 interface ArenaBoardProps {
   user: {
@@ -23,6 +24,44 @@ export const ArenaBoard = ({ user, totalHours, streak, tasksCompleted, wpm }: Ar
   const [sortBy, setSortBy] = useState<'points' | 'hours' | 'streak' | 'tasks' | 'wpm'>('points');
   const [searchQuery, setSearchQuery] = useState('');
   const [nudgeStates, setNudgeStates] = useState<Record<string, boolean>>({});
+  const [candidatesLogs, setCandidatesLogs] = useState<Record<string, StudyLog[]>>({});
+
+  useEffect(() => {
+    if (realRankings.length === 0) return;
+
+    const unsubscribes = realRankings.map(candidate => {
+      if (candidate.userId === user.uid) return null;
+
+      const logsQ = query(
+        collection(db, 'users', candidate.userId, 'logs'),
+        where('isVerified', '==', true),
+        orderBy('date', 'desc')
+      );
+
+      return onSnapshot(logsQ, (snapshot) => {
+        const logs = snapshot.docs.map(doc => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            ...data,
+            date: data.date?.toDate ? data.date.toDate() : new Date(data.date || Date.now()),
+            createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt || Date.now())
+          } as StudyLog;
+        });
+
+        setCandidatesLogs(prev => ({
+          ...prev,
+          [candidate.userId]: logs
+        }));
+      }, (error) => {
+        console.error(`Failed to listen to logs for candidate ${candidate.userId}:`, error);
+      });
+    }).filter(Boolean);
+
+    return () => {
+      unsubscribes.forEach(unsub => unsub && (unsub as () => void)());
+    };
+  }, [realRankings, user.uid]);
 
   // Live Sync tracking states
   interface LiveEvent {
@@ -1002,6 +1041,159 @@ export const ArenaBoard = ({ user, totalHours, streak, tasksCompleted, wpm }: Ar
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* Competitor Verification Peer-Audit Console */}
+      <div className="bg-slate-50 dark:bg-zinc-950 border border-slate-150/40 dark:border-zinc-800 p-6 md:p-8 rounded-3xl mt-8">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+          <div>
+            <h2 className="text-lg font-bold dark:text-white flex items-center gap-2">
+              <ShieldAlert className="w-5 h-5 text-indigo-500 animate-pulse" /> Competitor Verification Board
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-zinc-400 mt-1">
+              Inspect submitted scratchpad images and insights to verify the authenticity of competitor leaderboard scores.
+            </p>
+          </div>
+          <div className="bg-indigo-50/70 dark:bg-indigo-950/20 border border-indigo-200 dark:border-indigo-900/40 p-3 rounded-2xl flex items-center gap-3">
+            <span className="text-[10px] font-black uppercase tracking-wider text-indigo-600 dark:text-indigo-400 bg-indigo-100 dark:bg-indigo-900/60 px-2 py-1 rounded">Rulebook</span>
+            <span className="text-[11px] text-slate-600 dark:text-zinc-350 font-medium">
+              👍 2 Vouches: <strong>+50 AP</strong> bonus | 👎 2 Flags: <strong>-150 AP</strong> deduction
+            </span>
+          </div>
+        </div>
+
+        {/* Display Verified Study Log Proof Cards */}
+        {Object.keys(candidatesLogs).length === 0 || Object.values(candidatesLogs).every(arr => arr.length === 0) ? (
+          <div className="text-center py-12 px-4 bg-white dark:bg-zinc-900 border border-slate-100 dark:border-zinc-800 rounded-2xl">
+            <div className="text-3xl mb-3">📂</div>
+            <h4 className="text-sm font-bold text-slate-700 dark:text-zinc-300 font-sans">No Scratchpad Proofs Uploaded Yet</h4>
+            <p className="text-xs text-slate-400 dark:text-zinc-500 max-w-sm mx-auto mt-1 leading-relaxed">
+              No active candidates have logged verified study times with Google Drive scratchpad attachments. Evaluated logs will populate here once uploaded.
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {realRankings
+              .filter(cand => cand.userId !== user.uid && candidatesLogs[cand.userId]?.length > 0)
+              .flatMap(cand => {
+                const logs = candidatesLogs[cand.userId] || [];
+                return logs.map((log: any) => {
+                  const hasAudited = (cand.flaggedBy || []).includes(user.uid) || (cand.passedBy || []).includes(user.uid);
+                  const directImageUrl = getDirectDriveImageUrl(log.driveFileUrl);
+                  
+                  return (
+                    <motion.div
+                      key={log.id}
+                      initial={{ opacity: 0, scale: 0.98 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className="bg-white dark:bg-zinc-900 border border-slate-100 dark:border-zinc-800 rounded-2xl p-5 shadow-sm flex flex-col justify-between hover:border-slate-300 dark:hover:border-zinc-700 transition-all duration-300 group"
+                    >
+                      <div>
+                        {/* Member profile header in Proof Card */}
+                        <div className="flex items-center gap-3 pb-3 border-b border-slate-50 dark:border-zinc-800/80">
+                          <img src={cand.photoURL} alt="" className="w-8.5 h-8.5 rounded-full border border-slate-200" />
+                          <div className="min-w-0">
+                            <h4 className="text-xs font-black text-slate-800 dark:text-zinc-200 truncate">{cand.displayName}</h4>
+                            <p className="text-[10px] text-slate-400 font-medium">
+                              Logged {formatDistanceToNow(log.date)} ago
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Session Details */}
+                        <div className="mt-4 space-y-2.5">
+                          <div className="flex justify-between items-start">
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900/30">
+                              {log.category}
+                            </span>
+                            <span className="text-[10px] font-mono text-slate-500 font-extrabold flex items-center gap-1">
+                              <Clock className="w-3.5 h-3.5 text-slate-400" /> {log.duration} mins
+                            </span>
+                          </div>
+
+                          <p className="text-xs text-slate-600 dark:text-zinc-400 leading-relaxed italic line-clamp-3">
+                            "{log.notes || 'No notes saved.'}"
+                          </p>
+
+                          {/* Key Takeaway Insight */}
+                          <div className="bg-purple-50/70 dark:bg-purple-950/20 border border-purple-100/40 dark:border-purple-900/30 p-3 rounded-xl text-[11px] text-slate-700 dark:text-zinc-350 leading-relaxed">
+                            <span className="font-bold text-purple-600 dark:text-purple-400 font-sans">Key Takeaway Analysis:</span>{' '}
+                            {log.takeawayInsight || 'None saved.'}
+                          </div>
+
+                          {/* Render Google Drive Proof Image directly */}
+                          {log.driveFileUrl && (
+                            <div className="mt-3 overflow-hidden rounded-xl bg-slate-950 border border-slate-800/80 aspect-video relative group flex items-center justify-center">
+                              <img
+                                src={directImageUrl}
+                                referrerPolicy="no-referrer"
+                                alt="Google Drive Scratchpad Proof"
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                onError={(e) => {
+                                  (e.target as any).style.display = 'none';
+                                  const fallbackText = document.getElementById(`fallback-text-${log.id}`);
+                                  if (fallbackText) fallbackText.style.display = 'flex';
+                                }}
+                              />
+                              <div 
+                                id={`fallback-text-${log.id}`} 
+                                className="absolute inset-0 flex flex-col items-center justify-center p-4 bg-zinc-950 text-center gap-2 hidden"
+                              >
+                                <div className="text-xl">📄</div>
+                                <span className="text-[10px] text-zinc-400 font-medium font-mono">Drive File Link Verified</span>
+                              </div>
+                              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent p-2.5 flex justify-between items-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                <span className="text-[9px] text-white font-mono truncate max-w-[125px]">{log.proofImageName || 'Drive Image Proof'}</span>
+                                <a 
+                                  href={log.driveFileUrl} 
+                                  target="_blank" 
+                                  rel="noreferrer" 
+                                  className="text-[9px] bg-indigo-600 hover:bg-indigo-550 text-white font-bold py-1 px-2 rounded flex items-center gap-1 transition-colors"
+                                >
+                                  Open Drive 🔗
+                                </a>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Action buttons matching the candidate */}
+                      <div className="mt-5 pt-4 border-t border-slate-100 dark:border-zinc-800/80 flex flex-col gap-2">
+                        {hasAudited ? (
+                          <div className="text-center py-2 bg-slate-50 dark:bg-zinc-800/40 rounded-xl border border-slate-100 dark:border-zinc-800">
+                            <span className="text-[10px] font-black text-slate-500 dark:text-zinc-450 uppercase tracking-widest flex items-center justify-center gap-1">
+                              🛡️ Audit Verdict Logged
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => submitAudit(cand, 'pass')}
+                              className="flex-1 py-1.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/25 border border-emerald-500/15 hover:border-emerald-500/35 text-emerald-600 dark:text-emerald-450 rounded-xl text-[10px] font-extrabold select-none transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-1"
+                            >
+                              👍 Vouch (Trust)
+                            </button>
+                            <button
+                              onClick={() => submitAudit(cand, 'flag_fraud')}
+                              className="flex-1 py-1.5 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/25 border border-rose-500/15 hover:border-rose-500/35 text-rose-600 dark:text-rose-450 rounded-xl text-[10px] font-extrabold select-none transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-1"
+                            >
+                              👎 Flag (Fraud)
+                            </button>
+                          </div>
+                        )}
+
+                        <div className="flex items-center justify-between text-[10px] text-slate-400 dark:text-zinc-500 px-1 font-semibold mt-1">
+                          <span>Vouches: <strong className="text-emerald-500 font-extrabold">{(cand.passedBy || []).length}</strong>/2</span>
+                          <span>Flags: <strong className="text-rose-500 font-extrabold">{(cand.flaggedBy || []).length}</strong>/2</span>
+                        </div>
+                      </div>
+                    </motion.div>
+                  );
+                });
+              })}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -13,6 +13,10 @@ export interface StudyLog {
   startTime?: string;
   endTime?: string;
   isUnverifiedSession?: boolean;
+  isVerified?: boolean;
+  takeawayInsight?: string;
+  proofImageName?: string;
+  driveFileUrl?: string;
 }
 
 export interface Session {

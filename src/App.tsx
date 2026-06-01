@@ -18,7 +18,7 @@ import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
 import { 
-  auth, db, googleProvider, signInWithPopup, signOut, onAuthStateChanged, User,
+  auth, db, googleProvider, signInWithPopup, signOut, onAuthStateChanged, User, GoogleAuthProvider,
   collection, doc, addDoc, updateDoc, deleteDoc, query, where, orderBy, onSnapshot, Timestamp, setDoc, getDoc, writeBatch
 } from './firebase';
 
@@ -28,6 +28,7 @@ import { ActionPlanView } from './components/ActionPlanView';
 import { AccountabilityCockpit } from './components/AccountabilityCockpit';
 import { ArenaBoard } from './components/ArenaBoard';
 import { StudyLog, ReadingLog, DailyTask } from './types';
+import { getDirectDriveImageUrl } from './utils';
 
 const DOMAINS = ['Philosophy', 'Economics', 'Sociology', 'Science', 'Literature', 'History', 'Technology', 'Other'];
 
@@ -306,11 +307,38 @@ function AppContent() {
   const [isImporting, setIsImporting] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
 
+  // Verification pipeline states
+  const [isVerified, setIsVerified] = useState(false);
+  const [proofImage, setProofImage] = useState<File | null>(null);
+  const [driveFileUrl, setDriveFileUrl] = useState('');
+  const [isUploadingToDrive, setIsUploadingToDrive] = useState(false);
+  const [googleAccessToken, setGoogleAccessToken] = useState<string | null>(null);
+  const [takeawayInsight, setTakeawayInsight] = useState('');
+
+  // Restore Google Drive access token from localStorage on component mount
+  useEffect(() => {
+    const token = localStorage.getItem('google_access_token');
+    const expiry = localStorage.getItem('google_access_token_expiry');
+    if (token) {
+      if (expiry && Date.now() < Number(expiry)) {
+        setGoogleAccessToken(token);
+      } else {
+        localStorage.removeItem('google_access_token');
+        localStorage.removeItem('google_access_token_expiry');
+      }
+    }
+  }, []);
+
   useEffect(() => {
     if (activeTab === 'log' && !editingLogId) {
       setStartTime(format(new Date(), 'HH:mm'));
       setEndTime(format(addHours(new Date(), 1), 'HH:mm'));
       setDate(format(new Date(), 'yyyy-MM-dd'));
+      // Reset verification fields
+      setIsVerified(false);
+      setProofImage(null);
+      setDriveFileUrl('');
+      setTakeawayInsight('');
     }
   }, [activeTab, editingLogId]);
 
@@ -503,7 +531,13 @@ function AppContent() {
 
   const handleLogin = async () => {
     try {
-      await signInWithPopup(auth, googleProvider);
+      const result = await signInWithPopup(auth, googleProvider);
+      const credential = GoogleAuthProvider.credentialFromResult(result);
+      if (credential?.accessToken) {
+        setGoogleAccessToken(credential.accessToken);
+        localStorage.setItem('google_access_token', credential.accessToken);
+        localStorage.setItem('google_access_token_expiry', (Date.now() + 3500 * 1000).toString());
+      }
     } catch (error) {
       console.error("Login failed:", error);
     }
@@ -511,9 +545,151 @@ function AppContent() {
 
   const handleLogout = () => signOut(auth);
 
+  const [isDragging, setIsDragging] = useState(false);
+
+  const handleFileChange = (file: File) => {
+    if (file.size > 800 * 1024) {
+      setFormError("Proof image exceeds the 800KB limit.");
+      setTimeout(() => setFormError(null), 4000);
+      return;
+    }
+    setProofImage(file);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      handleFileChange(e.dataTransfer.files[0]);
+    }
+  };
+
+  // Isolated asynchronous function to check / create folder on Google Drive
+  const getOrCreateFolder = async (token: string): Promise<string> => {
+    try {
+      const q = "name = 'CAT_Prep_Proofs' and mimeType = 'application/vnd.google-apps.folder' and trashed = false";
+      const searchUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id)`;
+      const searchRes = await fetch(searchUrl, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!searchRes.ok) {
+        throw new Error(`Google Directory search check returned status ${searchRes.status}`);
+      }
+      const data = await searchRes.json();
+      if (data.files && data.files.length > 0) {
+        return data.files[0].id;
+      }
+
+      // Base creation if folder catalog doesn't exist
+      const createRes = await fetch('https://www.googleapis.com/drive/v3/files', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          name: 'CAT_Prep_Proofs',
+          mimeType: 'application/vnd.google-apps.folder'
+        })
+      });
+      if (!createRes.ok) {
+        throw new Error(`Google Directory creation returned status ${createRes.status}`);
+      }
+      const createData = await createRes.json();
+      return createData.id;
+    } catch (err) {
+      console.error("Folder lookup/creation error:", err);
+      throw err;
+    }
+  };
+
+  // Step 2: Isolated search/create & multipart drive uploading pipeline
+  const uploadToGoogleDrive = async (file: File, token: string): Promise<string> => {
+    setIsUploadingToDrive(true);
+    try {
+      // Get target destination folder ID
+      const folderId = await getOrCreateFolder(token);
+
+      // Read modern binary stream
+      const arrayBuffer = await file.arrayBuffer();
+      
+      // Build Google Drive V3 compliance multipart/related payload structure
+      const boundary = 'cat_prep_vault_multipart_boundary';
+      const delimiter = `\r\n--${boundary}\r\n`;
+      const close_delim = `\r\n--${boundary}--`;
+
+      const metadata = {
+        name: file.name,
+        parents: [folderId]
+      };
+
+      const metadataPart = `${delimiter}Content-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n`;
+      const mediaPartHeader = `${delimiter}Content-Type: ${file.type || 'image/jpeg'}\r\n\r\n`;
+
+      const multipartBlob = new Blob([
+        metadataPart,
+        mediaPartHeader,
+        new Uint8Array(arrayBuffer),
+        close_delim
+      ], { type: `multipart/related; boundary=${boundary}` });
+
+      const uploadUrl = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink';
+      const res = await fetch(uploadUrl, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': `multipart/related; boundary=${boundary}`
+        },
+        body: multipartBlob
+      });
+
+      if (!res.ok) {
+        throw new Error(`Cloud upload server returned status ${res.status}`);
+      }
+
+      const uploadData = await res.json();
+      if (!uploadData.webViewLink) {
+        throw new Error("No webViewLink parsed from Google Drive file response.");
+      }
+
+      // Propagate read permission so anyone with link can view the file
+      try {
+        await fetch(`https://www.googleapis.com/drive/v3/files/${uploadData.id}/permissions`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            role: 'reader',
+            type: 'anyone'
+          })
+        });
+      } catch (permError) {
+        console.warn("Failed asserting public read permissions:", permError);
+      }
+
+      return uploadData.webViewLink;
+    } catch (err) {
+      console.error("Direct google drive upload failed:", err);
+      throw err;
+    } finally {
+      setIsUploadingToDrive(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || isSubmitting) return;
+    if (!user || isSubmitting || isUploadingToDrive) return;
 
     const [startH, startM] = startTime.split(':').map(Number);
     const [endH, endM] = endTime.split(':').map(Number);
@@ -526,7 +702,44 @@ function AppContent() {
       return;
     }
 
+    if (isVerified) {
+      if (!proofImage && !driveFileUrl) {
+        setFormError("A scratchpad proof image (max 800KB) is required for verified logs.");
+        setTimeout(() => setFormError(null), 4000);
+        return;
+      }
+      if (!googleAccessToken) {
+        setFormError("Authentication Required: Please permit Google Drive connectivity first.");
+        setTimeout(() => setFormError(null), 4000);
+        return;
+      }
+      if (!takeawayInsight.trim()) {
+        setFormError("Key takeaway insights are required for verified logs.");
+        setTimeout(() => setFormError(null), 4000);
+        return;
+      }
+      if (takeawayInsight.length > 200) {
+        setFormError("Key takeaway insights cannot exceed 200 characters.");
+        setTimeout(() => setFormError(null), 4000);
+        return;
+      }
+    }
+
     setIsSubmitting(true);
+    let finalDriveUrl = driveFileUrl;
+
+    if (isVerified && proofImage) {
+      try {
+        finalDriveUrl = await uploadToGoogleDrive(proofImage, googleAccessToken!);
+        setDriveFileUrl(finalDriveUrl);
+      } catch (uploadError) {
+        setFormError("Google Drive Upload has failed. Please verify credentials/network.");
+        setTimeout(() => setFormError(null), 4000);
+        setIsSubmitting(false);
+        return;
+      }
+    }
+
     const path = editingLogId 
       ? `users/${user.uid}/logs/${editingLogId}`
       : `users/${user.uid}/logs`;
@@ -541,6 +754,11 @@ function AppContent() {
         rating,
         startTime,
         endTime,
+        isVerified,
+        isUnverifiedSession: !isVerified,
+        takeawayInsight: isVerified ? takeawayInsight : "",
+        proofImageName: isVerified && proofImage ? proofImage.name : (isVerified && finalDriveUrl ? "Google Drive Proof" : ""),
+        driveFileUrl: isVerified ? finalDriveUrl : "",
         updatedAt: Timestamp.now()
       };
 
@@ -557,6 +775,10 @@ function AppContent() {
       }
       
       setNotes('');
+      setIsVerified(false);
+      setProofImage(null);
+      setDriveFileUrl('');
+      setTakeawayInsight('');
       setEditingLogId(null);
       setActiveTab('dashboard');
     } catch (error) {
@@ -574,6 +796,10 @@ function AppContent() {
     setEndTime(log.endTime || '10:00');
     setNotes(log.notes || '');
     setRating(log.rating || 3);
+    setIsVerified(log.isVerified === true || !log.isUnverifiedSession);
+    setTakeawayInsight(log.takeawayInsight || '');
+    setProofImage(null);
+    setDriveFileUrl(log.driveFileUrl || '');
     setActiveTab('log');
   };
 
@@ -1653,62 +1879,96 @@ function AppContent() {
           )}
 
           {activeTab === 'log' && (
-            <div className="max-w-2xl mx-auto bg-white dark:bg-zinc-900 p-8 rounded-3xl border border-slate-100 dark:border-zinc-800 shadow-sm">
-              <h2 className="text-2xl font-bold mb-6 dark:text-white">{editingLogId ? 'Edit Study Log' : 'Log Study Time'}</h2>
-              <form onSubmit={handleSubmit} className="space-y-6">
-                <div className="grid grid-cols-2 gap-4">
+            <div className="max-w-2xl mx-auto bg-surface border border-border-tactical p-8 rounded-3xl shadow-2xl relative overflow-hidden text-text-primary font-sans transition-colors duration-300">
+              
+              {/* Tactical Grid Overlay effect */}
+              <div className="absolute inset-0 bg-[linear-gradient(var(--border-tactical)_1px,transparent_1px),linear-gradient(90deg,var(--border-tactical)_1px,transparent_1px)] bg-[size:20px_20px] pointer-events-none opacity-[0.12] animate-pulse" />
+              
+              {/* Header */}
+              <div className="relative z-10 flex items-center justify-between mb-6 border-b border-border-tactical pb-4">
+                <div>
+                  <h2 className="text-xl font-bold uppercase tracking-wider text-accent-purple flex items-center gap-2">
+                    <Shield className="w-5 h-5 text-accent-purple animate-pulse" />
+                    {editingLogId ? 'Edit Study Log' : 'Log Study Time'}
+                  </h2>
+                  <p className="text-[10px] text-text-muted uppercase tracking-widest mt-1">Manual Learning Verification Protocol</p>
+                </div>
+                <div className="px-2.5 py-1 bg-surface-elevated rounded border border-border-tactical text-[10px] font-mono text-text-secondary">
+                  SECURE_MODE: ACTIVE
+                </div>
+              </div>
+
+              <form onSubmit={handleSubmit} className="space-y-6 relative z-10">
+                
+                {/* Category & Date */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-700 dark:text-zinc-300">Category</label>
+                    <label className="text-xs uppercase tracking-wider font-semibold text-text-secondary">Category</label>
                     <select 
                       value={category} 
                       onChange={(e) => setCategory(e.target.value)}
-                      className="w-full p-3 bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white"
+                      className="w-full p-3 bg-background border border-border-tactical rounded-xl focus:outline-none focus:ring-2 focus:ring-accent-purple text-text-primary font-sans transition-colors"
                     >
-                      {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                      {categories.map(c => <option key={c} value={c} className="bg-surface text-text-primary">{c}</option>)}
                     </select>
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-700 dark:text-zinc-300">Date</label>
+                    <label className="text-xs uppercase tracking-wider font-semibold text-text-secondary">Date</label>
                     <input 
                       type="date" 
                       value={date} 
                       onChange={(e) => setDate(e.target.value)}
-                      className="w-full p-3 bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white"
+                      className={cn(
+                        "w-full p-3 bg-background border border-border-tactical rounded-xl focus:outline-none focus:ring-2 focus:ring-accent-purple text-text-primary font-sans transition-colors",
+                        resolvedTheme === 'dark' ? "[color-scheme:dark]" : "[color-scheme:light]"
+                      )}
                     />
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+
+                {/* Times */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-700 dark:text-zinc-300">Start Time</label>
+                    <label className="text-xs uppercase tracking-wider font-semibold text-text-secondary">Start Time</label>
                     <input 
                       type="time" 
                       value={startTime} 
                       onChange={(e) => setStartTime(e.target.value)}
-                      className="w-full p-3 bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white"
+                      className={cn(
+                        "w-full p-3 bg-background border border-border-tactical rounded-xl focus:outline-none focus:ring-2 focus:ring-accent-purple text-text-primary font-sans transition-colors",
+                        resolvedTheme === 'dark' ? "[color-scheme:dark]" : "[color-scheme:light]"
+                      )}
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-700 dark:text-zinc-300">End Time</label>
+                    <label className="text-xs uppercase tracking-wider font-semibold text-text-secondary">End Time</label>
                     <input 
                       type="time" 
                       value={endTime} 
                       onChange={(e) => setEndTime(e.target.value)}
-                      className="w-full p-3 bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white"
+                      className={cn(
+                        "w-full p-3 bg-background border border-border-tactical rounded-xl focus:outline-none focus:ring-2 focus:ring-accent-purple text-text-primary font-sans transition-colors",
+                        resolvedTheme === 'dark' ? "[color-scheme:dark]" : "[color-scheme:light]"
+                      )}
                     />
                   </div>
                 </div>
+
+                {/* Notes */}
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-700 dark:text-zinc-300">Notes</label>
+                  <label className="text-xs uppercase tracking-wider font-semibold text-text-secondary">Notes</label>
                   <textarea 
                     value={notes} 
                     onChange={(e) => setNotes(e.target.value)}
-                    rows={4}
-                    className="w-full p-3 bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white"
-                    placeholder="What did you study?"
+                    rows={3}
+                    className="w-full p-3 bg-background border border-border-tactical rounded-xl focus:outline-none focus:ring-2 focus:ring-accent-purple text-text-primary font-sans resize-none transition-colors"
+                    placeholder="Describe what study materials or concepts were covered..."
                   />
                 </div>
+
+                {/* Focus Rating */}
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-700 dark:text-zinc-300">Focus Rating (1-5)</label>
+                  <label className="text-xs uppercase tracking-wider font-semibold text-text-secondary">Focus Rating (1-5)</label>
                   <div className="flex gap-4">
                     {[1, 2, 3, 4, 5].map((r) => (
                       <button
@@ -1716,10 +1976,10 @@ function AppContent() {
                         type="button"
                         onClick={() => setRating(r)}
                         className={cn(
-                          "w-12 h-12 rounded-xl flex items-center justify-center font-bold transition-all",
+                          "w-12 h-12 rounded-xl flex items-center justify-center font-bold transition-all border select-none cursor-pointer",
                           rating === r 
-                            ? "bg-indigo-600 text-white" 
-                            : "bg-slate-50 dark:bg-zinc-800 text-slate-400 border border-slate-200 dark:border-zinc-700"
+                            ? "bg-accent-purple border-accent-purple text-white shadow-[0_0_15px_rgba(147,51,234,0.4)] dark:shadow-[0_0_15px_rgba(147,51,234,0.45)]" 
+                            : "bg-background border-border-tactical text-text-muted hover:border-text-secondary hover:text-text-primary"
                         )}
                       >
                         {r}
@@ -1727,20 +1987,163 @@ function AppContent() {
                     ))}
                   </div>
                 </div>
-                {formError && <p className="text-red-500 text-sm">{formError}</p>}
+
+                {/* The Verification Toggle */}
+                <div className="p-4 bg-background border border-border-tactical rounded-2xl flex items-center justify-between gap-4 transition-colors">
+                  <div className="space-y-0.5">
+                    <label className="text-sm font-bold text-text-secondary flex items-center gap-1.5 cursor-pointer select-none" htmlFor="verify-toggle">
+                      <span>Verify Session (Required for Arena Points & Streaks)</span>
+                    </label>
+                    <p className="text-[11px] text-text-muted">
+                      Unverified manual logs will be saved to history but yield 0 AP.
+                    </p>
+                  </div>
+                  <div className="relative inline-flex items-center cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      id="verify-toggle"
+                      checked={isVerified}
+                      onChange={(e) => setIsVerified(e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div 
+                      onClick={() => setIsVerified(!isVerified)}
+                      className="w-11 h-6 bg-surface-elevated peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-text-muted after:border-border-tactical after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-accent-purple peer-checked:after:bg-white cursor-pointer"
+                    />
+                  </div>
+                </div>
+
+                {/* Conditional Expansion (Proof Vault) */}
+                <AnimatePresence>
+                  {isVerified && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      transition={{ duration: 0.3 }}
+                      className="space-y-4 pt-1 pb-2 overflow-hidden transition-all duration-300"
+                    >
+                      <div className="border border-accent-purple/30 bg-accent-purple/5 p-4 rounded-2xl space-y-4">
+                        <div className="flex items-center justify-between border-b border-accent-purple/10 pb-2">
+                          <span className="text-[10px] font-black uppercase tracking-wider text-accent-purple bg-accent-purple/10 px-2 py-0.5 rounded border border-accent-purple/20">Proof Vault Required</span>
+                          <span className="text-[9px] text-text-muted font-mono">FILE_VERIFIER_ONLINE</span>
+                        </div>
+
+                        {/* Google Drive Connection Indicator & Authorizer */}
+                        <div className="flex items-center justify-between p-3 bg-background border border-border-tactical rounded-xl text-xs gap-4">
+                          <div className="flex items-center gap-2">
+                            <span className={cn(
+                              "w-2.5 h-2.5 rounded-full animate-pulse",
+                              googleAccessToken ? "bg-emerald-500" : "bg-accent-purple/60 shadow-[0_0_8px_rgba(147,51,234,0.4)] animate-pulse"
+                            )} />
+                            <span className="font-semibold text-text-secondary">
+                              {googleAccessToken ? "Google Drive Connected" : "Connection Required for Uploads"}
+                            </span>
+                          </div>
+                          {!googleAccessToken && (
+                            <button
+                              type="button"
+                              onClick={handleLogin}
+                              className="px-3 py-1.5 bg-accent-purple hover:opacity-90 text-white rounded-lg font-bold transition-all text-[11px] uppercase tracking-widest flex items-center gap-1 cursor-pointer select-none"
+                            >
+                              Connect Drive 📂
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Drag and drop zone */}
+                        <div
+                          onDragOver={handleDragOver}
+                          onDragLeave={handleDragLeave}
+                          onDrop={handleDrop}
+                          onClick={() => document.getElementById('scratchpad-uploader')?.click()}
+                          className={cn(
+                            "border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-2",
+                            isDragging 
+                              ? "border-accent-purple bg-accent-purple/10 text-accent-purple" 
+                              : "border-border-tactical bg-background text-text-muted hover:border-text-secondary hover:bg-surface-elevated/40"
+                          )}
+                        >
+                          <input 
+                            type="file"
+                            id="scratchpad-uploader"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => {
+                              if (e.target.files && e.target.files[0]) {
+                                handleFileChange(e.target.files[0]);
+                              }
+                            }}
+                          />
+                          <Upload className="w-8 h-8 text-accent-purple animate-pulse" />
+                          <div>
+                            <p className="text-xs font-bold text-text-primary">
+                              {proofImage ? `✓ Selected: ${proofImage.name}` : (driveFileUrl ? "✓ Google Drive Proof Loaded" : "Attach Scratchpad Photo (Max 800KB)")}
+                            </p>
+                            <p className="text-[10px] text-text-muted mt-1">
+                              Drag & drop here or click to browse local files
+                            </p>
+                            {driveFileUrl && (
+                              <a href={driveFileUrl} target="_blank" rel="noreferrer" className="text-accent-purple underline text-[11px] hover:opacity-80 mt-2 block font-mono">
+                                View Current Google Drive File 🔗
+                              </a>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Textarea Key Takeaway Insights */}
+                        <div className="space-y-1.5">
+                          <div className="flex justify-between items-center text-xs">
+                            <label className="uppercase tracking-wider font-semibold text-text-secondary">Key Takeaway Insights</label>
+                            <span className="text-[10px] font-mono text-text-muted">{takeawayInsight.length}/200</span>
+                          </div>
+                          <textarea 
+                            value={takeawayInsight} 
+                            onChange={(e) => setTakeawayInsight(e.target.value.slice(0, 200))}
+                            maxLength={200}
+                            rows={3}
+                            className="w-full p-3 bg-background border border-border-tactical rounded-xl focus:outline-none focus:ring-2 focus:ring-accent-purple text-text-primary font-sans resize-none text-xs transition-colors"
+                            placeholder="Distill the core concept, formula, error logic, or core mechanism designed in this specific session..."
+                          />
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {formError && <p className="text-accent-red bg-accent-red/10 border border-accent-red/30 p-2.5 rounded-xl text-xs font-semibold">{formError}</p>}
+                
+                {/* Actions */}
                 <div className="flex gap-4">
                   <button 
                     type="submit" 
-                    disabled={isSubmitting}
-                    className="flex-1 bg-indigo-600 text-white font-bold py-4 rounded-2xl hover:bg-indigo-700 transition-colors disabled:opacity-50"
+                    disabled={isSubmitting || isUploadingToDrive}
+                    className="flex-1 bg-accent-purple text-white font-extrabold py-4 rounded-2xl hover:opacity-90 transition-all font-sans uppercase tracking-wider text-sm select-none shadow-[0_4px_20px_rgba(110,68,255,0.25)] hover:shadow-[0_4px_25px_rgba(110,68,255,0.4)] hover:-translate-y-0.5 active:translate-y-0 active:scale-98 disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2"
                   >
-                    {editingLogId ? 'Update Log' : 'Save Log'}
+                    {isUploadingToDrive ? (
+                      <span className="flex items-center gap-2">
+                        <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        Uploading to Drive...
+                      </span>
+                    ) : (
+                      <>
+                        <Save className="w-4 h-4" />
+                        {editingLogId ? 'Update Log' : 'Save Log'}
+                      </>
+                    )}
                   </button>
                   {editingLogId && (
                     <button 
                       type="button" 
-                      onClick={() => setEditingLogId(null)}
-                      className="px-8 bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-400 font-bold py-4 rounded-2xl hover:bg-slate-200 dark:hover:bg-zinc-700 transition-colors"
+                      onClick={() => {
+                        setEditingLogId(null);
+                        setNotes('');
+                        setIsVerified(false);
+                        setProofImage(null);
+                        setDriveFileUrl('');
+                        setTakeawayInsight('');
+                      }}
+                      className="px-8 bg-background border border-border-tactical text-text-secondary font-bold py-4 rounded-2xl hover:bg-surface-elevated hover:text-text-primary transition-all cursor-pointer text-sm select-none"
                     >
                       Cancel
                     </button>
@@ -1802,9 +2205,31 @@ function AppContent() {
                               <span className="text-[10px] truncate max-w-[120px] italic">{(item as any).notes}</span>
                             </div>
                           ) : (
-                            <div className="flex flex-col">
-                              <span className="font-bold text-indigo-600 dark:text-indigo-400">{(item as any).rating || 3}/5 Focus</span>
-                              <span className="text-[10px] truncate max-w-[120px] italic">{(item as any).notes}</span>
+                            <div className="flex flex-col gap-0.5">
+                              <span className="font-bold text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5 flex-wrap">
+                                <span>{(item as any).rating || 3}/5 Focus</span>
+                                {(item as any).isVerified && (
+                                  <span className="text-[9px] font-extrabold tracking-widest text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-900/40 px-1 rounded uppercase">
+                                    VERIFIED
+                                  </span>
+                                )}
+                              </span>
+                              <span className="text-[10px] truncate max-w-[150px] italic">{(item as any).notes}</span>
+                              {(item as any).isVerified && (item as any).driveFileUrl && (
+                                <a 
+                                  href={(item as any).driveFileUrl} 
+                                  target="_blank" 
+                                  rel="noreferrer" 
+                                  className="text-[10px] text-purple-600 dark:text-purple-400 underline hover:text-purple-500 dark:hover:text-purple-300 font-mono mt-0.5 flex items-center gap-0.5"
+                                >
+                                  <span>📄 View Proof</span>
+                                </a>
+                              )}
+                              {(item as any).isVerified && (item as any).takeawayInsight && (
+                                <span className="text-[10px] text-zinc-500 dark:text-zinc-400 mt-0.5 leading-tight" title={(item as any).takeawayInsight}>
+                                  <span className="font-bold text-purple-600 dark:text-purple-400">Insight:</span> {(item as any).takeawayInsight}
+                                </span>
+                              )}
                             </div>
                           )}
                         </td>

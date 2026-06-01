@@ -131,7 +131,8 @@ service cloud.firestore {
       
       // User logs
       match /logs/{logId} {
-        allow read, delete: if isOwner(userId);
+        allow read: if isOwner(userId) || (isAuthenticated() && resource.data.isVerified == true);
+        allow delete: if isOwner(userId);
         allow create, update: if isOwner(userId) && isValidLog(request.resource.data);
       }
 
@@ -164,7 +165,22 @@ service cloud.firestore {
     // Public Arena / Leaderboard rankings
     match /arena_rankings/{userId} {
       allow read: if isAuthenticated();
-      allow create, update: if (isOwner(userId) || (isAuthenticated() && userId.matches('^bot_.*'))) && isValidArenaRanking(request.resource.data);
+      allow create: if (isOwner(userId) || (isAuthenticated() && userId.matches('^bot_.*'))) && isValidArenaRanking(request.resource.data);
+      allow update: if (
+        isOwner(userId) || 
+        (isAuthenticated() && userId.matches('^bot_.*')) ||
+        (
+          isAuthenticated() && 
+          request.resource.data.userId == resource.data.userId &&
+          request.resource.data.displayName == resource.data.displayName &&
+          request.resource.data.photoURL == resource.data.photoURL &&
+          request.resource.data.totalHours == resource.data.totalHours &&
+          request.resource.data.streak == resource.data.streak &&
+          request.resource.data.tasksCompleted == resource.data.tasksCompleted &&
+          request.resource.data.wpm == resource.data.wpm &&
+          request.resource.data.lastActive == resource.data.lastActive
+        )
+      ) && isValidArenaRanking(request.resource.data);
       allow delete: if isOwner(userId) || (isAuthenticated() && userId.matches('^bot_.*'));
     }
   }

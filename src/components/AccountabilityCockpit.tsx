@@ -361,34 +361,34 @@ ${failedList.length > 0
     <div className="space-y-6 max-w-4xl mx-auto pb-12">
       
       {/* HUD Header Alert Block */}
-      <div className="bg-zinc-950 dark:bg-black text-rose-500 p-6 rounded-3xl border border-red-500/30 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-[0_0_20px_rgba(239,68,68,0.1)]">
+      <div className="bg-surface text-accent-red p-6 rounded-3xl border border-accent-red/30 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-[0_0_20px_rgba(239,68,68,0.1)] transition-colors duration-300">
         <div className="flex items-start gap-3">
-          <div className="p-3 bg-red-950/40 rounded-2xl border border-red-500/20 text-red-500 animate-pulse shrink-0">
+          <div className="p-3 bg-accent-red/10 rounded-2xl border border-accent-red/20 text-accent-red animate-pulse shrink-0">
             <Shield size={22} className="fill-current" />
           </div>
           <div>
-            <span className="text-[10px] font-black tracking-widest uppercase text-red-500 font-mono">
+            <span className="text-[10px] font-black tracking-widest uppercase text-accent-red font-mono">
               STRICT PERFORMANCE ENFORCEMENT ZONE
             </span>
-            <h1 className="text-2xl font-black text-zinc-100 mt-1 uppercase tracking-tight">
+            <h1 className="text-2xl font-black text-text-primary mt-1 uppercase tracking-tight">
               ACCOUNTABILITY COCKPIT
             </h1>
-            <p className="text-zinc-400 text-xs mt-1 leading-relaxed max-w-xl">
+            <p className="text-text-muted text-xs mt-1 leading-relaxed max-w-xl">
               Where soft excuses die. View your burn rates, audit weekly reports to mentors, upload actual images of scratchpads, and hold yourself to painful financial stakes.
             </p>
           </div>
         </div>
 
         {/* Dynamic Risk Gauge pill */}
-        <div className="bg-zinc-900 border border-zinc-800/80 px-4 py-3 rounded-2xl flex flex-col items-center justify-center min-w-[140px]">
-          <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest font-mono">Risk Level</span>
+        <div className="bg-surface-elevated border border-border-tactical px-4 py-3 rounded-2xl flex flex-col items-center justify-center min-w-[140px] transition-colors duration-300">
+          <span className="text-[9px] font-bold text-text-muted uppercase tracking-widest font-mono">Risk Level</span>
           <span className={cn(
             "text-sm font-black uppercase tracking-wider mt-1",
-            settings.stakesEnabled ? "text-red-500" : "text-amber-500"
+            settings.stakesEnabled ? "text-accent-red" : "text-amber-500"
           )}>
             {settings.stakesEnabled ? "🔥 PLEDGE ACTIVE" : "⚠️ LOW ACCOUNTABILITY"}
           </span>
-          <span className="text-[10px] text-zinc-400 mt-1 font-mono">
+          <span className="text-[10px] text-text-muted mt-1 font-mono">
             {settings.stakesEnabled ? `-$${settings.stakesAmount}/Failed Frog` : "No financial pain set"}
           </span>
         </div>
@@ -401,13 +401,13 @@ ${failedList.length > 0
         const dayName = todayDay === 6 ? 'Saturday' : todayDay === 0 ? 'Sunday' : 'Monday';
         if (!isAuditWindow) return null;
         return (
-          <div className="p-5 md:p-6 border border-slate-205 dark:border-zinc-800/80 rounded-2xl bg-white dark:bg-zinc-900/50 flex flex-col md:flex-row items-start md:items-center justify-between gap-6 transition-all shadow-sm relative overflow-hidden">
+          <div className="p-5 md:p-6 border border-border-tactical rounded-2xl bg-surface flex flex-col md:flex-row items-start md:items-center justify-between gap-6 transition-colors duration-300 shadow-sm relative overflow-hidden">
             <div className="flex items-start gap-4 min-w-0 flex-1">
               <div className={cn(
                 "p-3 rounded-xl border shrink-0",
                 auditSentThisWeek 
                   ? "bg-emerald-500/10 text-emerald-500 dark:text-emerald-400 border-emerald-500/20"
-                  : "bg-red-500/10 text-red-500 dark:text-red-400 border-red-500/20"
+                  : "bg-accent-red/10 text-accent-red border-accent-red/20"
               )}>
                 {auditSentThisWeek ? <CheckCircle2 className="w-5 h-5" /> : <Mail className="w-5 h-5" />}
               </div>
@@ -417,15 +417,15 @@ ${failedList.length > 0
                     "px-2 py-0.5 rounded-md text-[10px] font-bold font-mono tracking-wide",
                     auditSentThisWeek
                       ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                      : "bg-rose-500/10 text-rose-600 dark:text-rose-455"
+                      : "bg-accent-red/10 text-accent-red"
                   )}>
                     {auditSentThisWeek ? "✓ Audit Completed" : `Urgent: Audit Season (${dayName})`}
                   </span>
                 </div>
-                <h3 className="text-base font-semibold text-slate-900 dark:text-zinc-105 mt-1 tracking-tight">
+                <h3 className="text-base font-semibold text-text-primary mt-1 tracking-tight">
                   {auditSentThisWeek ? "Weekly accountability audit dispatched" : "Weekly accountability audit due"}
                 </h3>
-                <p className="text-xs text-slate-500 dark:text-zinc-400 mt-1.5 leading-relaxed max-w-2xl font-medium">
+                <p className="text-xs text-text-secondary mt-1.5 leading-relaxed max-w-2xl font-medium">
                   {auditSentThisWeek 
                     ? "Great job! Your weekly performance reports were successfully compiled and transmitted to your board of directors."
                     : "Authorized directors require immediate submission of your weekly compilation data to finalize transfer and prevent behavioral leaks."}
@@ -434,7 +434,7 @@ ${failedList.length > 0
                 {/* Structured list of authorized board recipients styled in blue */}
                 {settings.boardEmails && (
                   <div className="mt-3 flex flex-wrap gap-1.5 items-center">
-                    <span className="text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-wider">
+                    <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider">
                       Recipients:
                     </span>
                     <div className="flex flex-wrap gap-1.5">
@@ -452,10 +452,10 @@ ${failedList.length > 0
 
                 {emailResult && (
                   <div className={cn(
-                    "mt-4 p-4 rounded-xl border text-xs leading-relaxed max-w-xl",
+                    "mt-4 p-4 rounded-xl border text-xs leading-relaxed max-w-xl transition-colors duration-300",
                     emailResult.success 
                       ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400" 
-                      : "bg-rose-500/10 border-rose-500/20 text-rose-600 dark:text-rose-400"
+                      : "bg-accent-red/10 border-accent-red/20 text-accent-red"
                   )}>
                     <div className="font-bold flex items-center gap-1.5">
                       {emailResult.success ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertOctagon className="w-4 h-4 shrink-0" />}
@@ -463,10 +463,10 @@ ${failedList.length > 0
                     </div>
                     <p className="mt-1 font-semibold">{emailResult.message}</p>
                     {emailResult.suggestedSetup && (
-                      <div className="mt-2.5 p-2.5 bg-slate-50 dark:bg-black/20 rounded-lg text-[10px] text-slate-500 dark:text-zinc-400 font-mono space-y-1">
-                        <p className="font-bold text-amber-600 dark:text-amber-500 uppercase">Interactive Server Keys Setup Required:</p>
+                      <div className="mt-2.5 p-2.5 bg-surface-elevated text-text-secondary border border-border-tactical rounded-lg text-[10px] space-y-1">
+                        <p className="font-bold text-accent-red uppercase">Interactive Server Keys Setup Required:</p>
                         <p>{emailResult.suggestedSetup}</p>
-                        <p className="pt-1 text-[10px] text-slate-400">Rest assured, you can send IMMEDIATELY by clicking the "Local Client" button to route through your device's email client.</p>
+                        <p className="pt-1 text-[10px] text-text-muted">Rest assured, you can send IMMEDIATELY by clicking the "Local Client" button to route through your device's email client.</p>
                       </div>
                     )}
                   </div>
@@ -481,7 +481,7 @@ ${failedList.length > 0
                   type="button"
                   onClick={() => handleSendDirectEmail()}
                   disabled={isSendingEmail}
-                  className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-850 disabled:opacity-50 text-white font-semibold text-xs rounded-xl transition-all shadow-sm flex items-center justify-center gap-1.5 shrink-0"
+                  className="px-4 py-2.5 bg-accent-purple hover:opacity-90 active:opacity-100 disabled:opacity-50 text-white font-semibold text-xs rounded-xl transition-all shadow-sm flex items-center justify-center gap-1.5 shrink-0"
                 >
                   <Mail size={13} />
                   {isSendingEmail ? "Pushing..." : "Direct Push"}
@@ -496,14 +496,14 @@ ${failedList.length > 0
                     localStorage.setItem(`audit_sent_${currentWeekSunday}`, 'true');
                     setAuditSentThisWeek(true);
                   }}
-                  className="px-4 py-2.5 bg-white dark:bg-zinc-900 hover:bg-slate-50 dark:hover:bg-zinc-800 text-slate-700 dark:text-zinc-300 border border-slate-200 dark:border-zinc-800 font-semibold text-xs rounded-xl transition-all shadow-sm flex items-center justify-center gap-1.5 shrink-0"
+                  className="px-4 py-2.5 bg-surface hover:bg-surface-elevated text-text-secondary border border-border-tactical font-semibold text-xs rounded-xl transition-all shadow-sm flex items-center justify-center gap-1.5 shrink-0"
                 >
-                  <ExternalLink size={13} className="text-slate-400" />
+                  <ExternalLink size={13} className="text-text-muted" />
                   Local Client
                 </button>
 
                 {/* Subtle Divider */}
-                <div className="hidden sm:block w-px h-6 bg-slate-200 dark:bg-zinc-800 mx-1 shrink-0" />
+                <div className="hidden sm:block w-px h-6 bg-border-tactical mx-1 shrink-0" />
 
                 {/* Ghost Action (Mark Sent) */}
                 <button
@@ -512,7 +512,7 @@ ${failedList.length > 0
                     localStorage.setItem(`audit_sent_${currentWeekSunday}`, 'true');
                     setAuditSentThisWeek(true);
                   }}
-                  className="px-3.5 py-2.5 text-slate-400 hover:text-slate-605 dark:text-zinc-500 dark:hover:text-zinc-300 font-semibold text-xs rounded-xl transition-all hover:bg-slate-50 dark:hover:bg-zinc-800/20 text-center shrink-0"
+                  className="px-3.5 py-2.5 text-text-muted hover:text-text-secondary font-semibold text-xs rounded-xl transition-all hover:bg-surface-elevated text-center shrink-0"
                 >
                   Mark Sent
                 </button>
@@ -526,7 +526,7 @@ ${failedList.length > 0
                   localStorage.removeItem(`audit_sent_${currentWeekSunday}`);
                   setAuditSentThisWeek(false);
                 }}
-                className="text-[10px] text-slate-400 hover:text-rose-500 font-bold uppercase transition-all shrink-0 mt-2 md:mt-0"
+                className="text-[10px] text-text-muted hover:text-accent-red font-bold uppercase transition-all shrink-0 mt-2 md:mt-0"
               >
                 Reset Status
               </button>
@@ -536,14 +536,14 @@ ${failedList.length > 0
       })()}
 
       {/* Mode selectors bento navigation */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 bg-slate-50 dark:bg-zinc-900 p-1.5 rounded-2xl border border-slate-100 dark:border-zinc-800">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 bg-surface-elevated p-1.5 rounded-2xl border border-border-tactical transition-colors duration-300">
         <button
           onClick={() => setActiveSection('burn')}
           className={cn(
             "flex items-center gap-2 justify-center py-3 text-xs font-bold uppercase tracking-wider rounded-xl transition-all",
             activeSection === 'burn'
-              ? "bg-white dark:bg-zinc-800 text-indigo-600 dark:text-indigo-400 shadow-sm border border-slate-100 dark:border-zinc-700"
-              : "text-slate-500 dark:text-zinc-500 hover:bg-white/50 dark:hover:bg-zinc-800/40"
+              ? "bg-surface text-accent-purple shadow-sm border border-border-tactical font-extrabold focus:outline-none"
+              : "text-text-muted hover:bg-surface font-semibold hover:text-text-secondary"
           )}
         >
           <Flame size={14} />
@@ -554,8 +554,8 @@ ${failedList.length > 0
           className={cn(
             "flex items-center gap-2 justify-center py-3 text-xs font-bold uppercase tracking-wider rounded-xl transition-all",
             activeSection === 'proof'
-              ? "bg-white dark:bg-zinc-800 text-indigo-600 dark:text-indigo-400 shadow-sm border border-slate-100 dark:border-zinc-700"
-              : "text-slate-500 dark:text-zinc-500 hover:bg-white/50 dark:hover:bg-zinc-800/40"
+              ? "bg-surface text-accent-purple shadow-sm border border-border-tactical font-extrabold focus:outline-none"
+              : "text-text-muted hover:bg-surface font-semibold hover:text-text-secondary"
           )}
         >
           <Award size={14} />
@@ -566,8 +566,8 @@ ${failedList.length > 0
           className={cn(
             "flex items-center gap-2 justify-center py-3 text-xs font-bold uppercase tracking-wider rounded-xl transition-all",
             activeSection === 'stakes'
-              ? "bg-white dark:bg-zinc-800 text-indigo-600 dark:text-indigo-400 shadow-sm border border-slate-100 dark:border-zinc-700"
-              : "text-slate-500 dark:text-zinc-500 hover:bg-white/50 dark:hover:bg-zinc-800/40"
+              ? "bg-surface text-accent-purple shadow-sm border border-border-tactical font-extrabold focus:outline-none"
+              : "text-text-muted hover:bg-surface font-semibold hover:text-text-secondary"
           )}
         >
           <DollarSign size={14} />
@@ -578,8 +578,8 @@ ${failedList.length > 0
           className={cn(
             "flex items-center gap-2 justify-center py-3 text-xs font-bold uppercase tracking-wider rounded-xl transition-all",
             activeSection === 'audit'
-              ? "bg-white dark:bg-zinc-800 text-indigo-600 dark:text-indigo-400 shadow-sm border border-slate-100 dark:border-zinc-700"
-              : "text-slate-500 dark:text-zinc-500 hover:bg-white/50 dark:hover:bg-zinc-800/40"
+              ? "bg-surface text-accent-purple shadow-sm border border-border-tactical font-extrabold focus:outline-none"
+              : "text-text-muted hover:bg-surface font-semibold hover:text-text-secondary"
           )}
         >
           <Users size={14} />
@@ -590,8 +590,8 @@ ${failedList.length > 0
           className={cn(
             "flex items-center gap-2 justify-center py-3 text-xs font-bold uppercase tracking-wider rounded-xl transition-all h-full col-span-2 sm:col-span-1",
             activeSection === 'constraints'
-              ? "bg-white dark:bg-zinc-800 text-indigo-600 dark:text-indigo-400 shadow-sm border border-slate-100 dark:border-zinc-700"
-              : "text-slate-500 dark:text-zinc-500 hover:bg-white/50 dark:hover:bg-zinc-800/40"
+              ? "bg-surface text-accent-purple shadow-sm border border-border-tactical font-extrabold focus:outline-none"
+              : "text-text-muted hover:bg-surface font-semibold hover:text-text-secondary"
           )}
         >
           <Globe size={14} />
@@ -600,22 +600,22 @@ ${failedList.length > 0
       </div>
 
       {/* MAIN CONTAINER PANELS */}
-      <div className="bg-white dark:bg-zinc-900 border border-slate-100 dark:border-zinc-800 rounded-3xl p-6 md:p-8 shadow-sm">
+      <div className="bg-surface border border-border-tactical rounded-3xl p-6 md:p-8 shadow-sm transition-colors duration-300">
         
         {/* ============ 1. THE BURN RATE SECTION ============ */}
         {activeSection === 'burn' && (
           <div className="space-y-6">
-            <div className="flex flex-col md:flex-row md:items-baseline justify-between gap-2 border-b border-slate-105 dark:border-zinc-800/80 pb-4">
+            <div className="flex flex-col md:flex-row md:items-baseline justify-between gap-2 border-b border-border-tactical pb-4">
               <div>
-                <h3 className="text-xl font-bold text-slate-905 dark:text-white flex items-center gap-2">
-                  <Flame className="text-red-500 fill-red-500 animate-pulse" size={20} />
+                <h3 className="text-xl font-bold text-text-primary flex items-center gap-2">
+                  <Flame className="text-accent-red fill-accent-red animate-pulse" size={20} />
                   The Prep "Burn Rate" Calculator
                 </h3>
-                <p className="text-xs text-slate-400 mt-0.5">
+                <p className="text-xs text-text-muted mt-0.5">
                   Treat study time as a rapidly depleting bank account. Track your mandatory pace toward the target exam date.
                 </p>
               </div>
-              <span className="text-xs font-mono font-bold bg-slate-50 dark:bg-zinc-800/40 px-2.5 py-1 rounded text-indigo-600 dark:text-indigo-400">
+              <span className="text-xs font-mono font-bold bg-surface-elevated/40 px-2.5 py-1 rounded text-accent-purple">
                 {daysRemaining} Days Until Exam
               </span>
             </div>
@@ -624,12 +624,12 @@ ${failedList.length > 0
               <div className="space-y-6">
                 
                 {/* Inputs card */}
-                <div className="p-5 bg-slate-50/60 dark:bg-zinc-950/20 border border-slate-100 dark:border-zinc-850 rounded-2xl space-y-4">
-                  <h4 className="text-xs uppercase tracking-wider font-extrabold text-slate-400">Configure Targets</h4>
+                <div className="p-5 bg-surface-elevated/40 border border-border-tactical rounded-2xl space-y-4">
+                  <h4 className="text-xs uppercase tracking-wider font-extrabold text-text-muted">Configure Targets</h4>
                   
                   {/* Target hours input */}
                   <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-600 dark:text-zinc-400 block">
+                    <label className="text-xs font-bold text-text-secondary block">
                       Target Goal Hours (Deep Prep)
                     </label>
                     <input
@@ -639,13 +639,13 @@ ${failedList.length > 0
                       max={10000}
                       value={settings.burnGoalHours}
                       onChange={(e) => handleSaveSettings({ burnGoalHours: parseInt(e.target.value) || 500 })}
-                      className="w-full text-sm p-3 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl font-bold dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      className="w-full text-sm p-3 bg-background border border-border-tactical rounded-xl font-bold text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-purple transition-colors duration-300"
                     />
                   </div>
 
                   {/* Exam target date input */}
                   <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-600 dark:text-zinc-400 block">
+                    <label className="text-xs font-bold text-text-secondary block">
                       Exam Target Date (SimCAT / Official)
                     </label>
                     <input
@@ -653,17 +653,17 @@ ${failedList.length > 0
                       required
                       value={settings.examDate}
                       onChange={(e) => handleSaveSettings({ examDate: e.target.value })}
-                      className="w-full text-sm p-3 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl font-bold dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      className="w-full text-sm p-3 bg-background border border-border-tactical rounded-xl font-bold text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-purple transition-colors duration-300"
                     />
                   </div>
                 </div>
 
                 {/* Flatline Impact Statement */}
-                <div className="p-4 bg-red-500/5 dark:bg-red-500/10 border border-red-200/50 dark:border-red-950/50 rounded-2xl flex items-start gap-3">
-                  <AlertOctagon size={18} className="text-red-500 shrink-0 mt-0.5" />
+                <div className="p-4 bg-accent-red/5 border border-accent-red/20 rounded-2xl flex items-start gap-3 transition-colors duration-300">
+                  <AlertOctagon size={18} className="text-accent-red shrink-0 mt-0.5" />
                   <div className="space-y-1">
-                    <p className="text-xs font-black uppercase text-red-500">Mathematical Flatline Warning</p>
-                    <p className="text-slate-500 dark:text-zinc-400 text-xs leading-relaxed">
+                    <p className="text-xs font-black uppercase text-accent-red">Mathematical Flatline Warning</p>
+                    <p className="text-text-muted text-xs leading-relaxed">
                       Every day you spend at **0.0 hours completed** permanently raises your daily required burn rate for all remaining days. Procrastination directly shifts tomorrow's hill into a mountain.
                     </p>
                   </div>
@@ -671,46 +671,46 @@ ${failedList.length > 0
               </div>
 
               {/* Big Metric Output Dashboard */}
-              <div className="p-6 bg-slate-900 text-white rounded-3xl border border-slate-800 space-y-6 flex flex-col justify-between h-full min-h-[300px]">
+              <div className="p-6 bg-surface-elevated text-text-primary rounded-3xl border border-border-tactical space-y-6 flex flex-col justify-between h-full min-h-[300px] transition-colors duration-300">
                 
                 <div>
-                  <span className="text-[9px] font-bold text-red-500 uppercase tracking-widest font-mono">Required Pace</span>
+                  <span className="text-[9px] font-bold text-accent-red uppercase tracking-widest font-mono">Required Pace</span>
                   <div className="flex items-baseline gap-1 mt-1">
-                    <span className="text-4xl font-black text-rose-500">{dailyBurnRate.toFixed(2)}</span>
-                    <span className="text-xs font-semibold text-slate-400">hours / day</span>
+                    <span className="text-4xl font-black text-accent-red">{dailyBurnRate.toFixed(2)}</span>
+                    <span className="text-xs font-semibold text-text-secondary font-mono">hours / day</span>
                   </div>
-                  <p className="text-xs text-slate-400 mt-1">
+                  <p className="text-xs text-text-muted mt-1">
                     To reach your final goal before the exam.
                   </p>
                 </div>
 
-                <div className="space-y-4 pt-4 border-t border-slate-800">
+                <div className="space-y-4 pt-4 border-t border-border-tactical">
                   <div className="flex justify-between text-xs font-mono">
-                    <span className="text-slate-400">Progress</span>
-                    <span className="font-bold text-rose-400">
+                    <span className="text-text-secondary">Progress</span>
+                    <span className="font-bold text-accent-red">
                       {accomplishedHours.toFixed(1)} hrs completed / {remainingHours.toFixed(1)} hrs left
                     </span>
                   </div>
-                  <div className="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden">
+                  <div className="w-full bg-background h-2.5 rounded-full overflow-hidden">
                     <div 
-                      className="bg-rose-500 h-full transition-all duration-500"
+                      className="bg-accent-red h-full transition-all duration-500"
                       style={{ width: `${Math.min(100, (accomplishedHours / settings.burnGoalHours) * 100)}%` }}
                     />
                   </div>
                 </div>
 
-                <div className="pt-4 border-t border-slate-800 space-y-2">
+                <div className="pt-4 border-t border-border-tactical space-y-2">
                   <div className="flex items-center justify-between text-xs">
-                    <span className="text-slate-400">Pace Health Indicator:</span>
+                    <span className="text-text-secondary font-medium">Pace Health Indicator:</span>
                     {dailyBurnRate <= 2 ? (
-                      <span className="text-emerald-400 font-extrabold uppercase">✅ HEALTHY (PACE &lt;= 2.0h)</span>
+                      <span className="text-emerald-600 dark:text-emerald-400 font-extrabold uppercase font-mono">✅ HEALTHY (PACE &lt;= 2.0h)</span>
                     ) : dailyBurnRate <= 4 ? (
-                      <span className="text-yellow-400 font-extrabold uppercase">⚠️ CAUTION (PACE 2.0 - 4.0h)</span>
+                      <span className="text-yellow-600 dark:text-amber-400 font-extrabold uppercase font-mono">⚠️ CAUTION (PACE 2.0 - 4.0h)</span>
                     ) : (
-                      <span className="text-red-400 font-extrabold uppercase animate-pulse">🔥 CRITICAL (PACE &gt; 4.0h)</span>
+                      <span className="text-accent-red font-extrabold uppercase animate-pulse font-mono">🔥 CRITICAL (PACE &gt; 4.0h)</span>
                     )}
                   </div>
-                  <p className="text-[10px] text-slate-500 italic block leading-relaxed">
+                  <p className="text-[10px] text-text-muted italic block leading-relaxed font-semibold">
                     “Diligently track daily time logging in the Log tab to dynamically update this accomplished value.”
                   </p>
                 </div>
@@ -723,72 +723,72 @@ ${failedList.length > 0
         {/* ============ 2. THE PROOF VAULT SECTION ============ */}
         {activeSection === 'proof' && (
           <div className="space-y-8">
-            <div className="border-b border-slate-105 dark:border-zinc-800/80 pb-4">
-              <h3 className="text-xl font-bold text-slate-905 dark:text-white flex items-center gap-2">
-                <Award className="text-indigo-650 dark:text-indigo-400" size={20} />
+            <div className="border-b border-border-tactical pb-4">
+              <h3 className="text-xl font-bold text-text-primary flex items-center gap-2">
+                <Award className="text-accent-purple" size={20} />
                 The "Proof of Work" Vault
               </h3>
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="text-xs text-text-muted mt-0.5">
                 Lock down real retention. Upload photos of massive, messy scratchpads, screenshots of correct answers, or worksheet matrices to bypass the administrative illusion.
               </p>
             </div>
 
             {/* Standalone Proof Intake Form */}
-            <form onSubmit={handleUploadProof} className="bg-slate-50 dark:bg-zinc-950/20 rounded-2xl p-6 border border-slate-100 dark:border-zinc-800 grid grid-cols-1 md:grid-cols-2 gap-6">
+            <form onSubmit={handleUploadProof} className="bg-surface-elevated/40 rounded-2xl p-6 border border-border-tactical grid grid-cols-1 md:grid-cols-2 gap-6 transition-colors duration-300">
               
               <div className="space-y-4">
-                <h4 className="text-xs uppercase tracking-widest font-black text-indigo-500">Log New Unpadable Evidence</h4>
+                <h4 className="text-xs uppercase tracking-widest font-black text-accent-purple">Log New Unpadable Evidence</h4>
                 
                 {/* Title */}
                 <div className="space-y-1">
-                  <label className="text-xs text-slate-600 dark:text-zinc-400 font-bold">Action / Block Identifier</label>
+                  <label className="text-xs text-text-secondary font-bold">Action / Block Identifier</label>
                   <input
                     type="text"
                     required
                     value={proofTaskTitle}
                     onChange={(e) => setProofTaskTitle(e.target.value)}
                     placeholder="e.g., QA: Resolved 15 Quadratic Matrices"
-                    className="w-full text-xs p-3 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-full text-xs p-3 bg-background border border-border-tactical rounded-xl text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-purple transition-all"
                   />
                 </div>
 
                 {/* Subject & FileLink Grid */}
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
-                    <label className="text-xs text-slate-600 dark:text-zinc-400 font-bold">Section</label>
+                    <label className="text-xs text-text-secondary font-bold">Section</label>
                     <select
                       value={proofCategory}
                       onChange={(e) => setProofCategory(e.target.value)}
-                      className="w-full text-xs p-3 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl dark:text-white focus:outline-none"
+                      className="w-full text-xs p-3 bg-background border border-border-tactical rounded-xl text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-purple transition-all"
                     >
-                      <option value="QA">QA</option>
-                      <option value="DILR">DILR</option>
-                      <option value="VARC">VARC</option>
-                      <option value="Mock">Mock</option>
+                      <option className="bg-surface text-text-primary" value="QA">QA</option>
+                      <option className="bg-surface text-text-primary" value="DILR">DILR</option>
+                      <option className="bg-surface text-text-primary" value="VARC">VARC</option>
+                      <option className="bg-surface text-text-primary" value="Mock">Mock</option>
                     </select>
                   </div>
                   
                   <div className="space-y-1">
-                    <label className="text-xs text-slate-600 dark:text-zinc-400 font-bold">External Link (optional)</label>
+                    <label className="text-xs text-text-secondary font-bold">External Link (optional)</label>
                     <input
                       type="url"
                       value={proofFileLink}
                       onChange={(e) => setProofFileLink(e.target.value)}
                       placeholder="e.g. Notion, Sheets log"
-                      className="w-full text-xs p-3 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl dark:text-white focus:outline-none"
+                      className="w-full text-xs p-3 bg-background border border-border-tactical rounded-xl text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-purple transition-all"
                     />
                   </div>
                 </div>
 
                 {/* Takeaway */}
                 <div className="space-y-1">
-                  <label className="text-xs text-slate-600 dark:text-zinc-400 font-bold">Key Takeaway Insights</label>
+                  <label className="text-xs text-text-secondary font-bold">Key Takeaway Insights</label>
                   <textarea
                     rows={2}
                     value={proofNotes}
                     onChange={(e) => setProofNotes(e.target.value)}
                     placeholder="Capture the raw insight. What did you master? What silly mistake did you isolate?"
-                    className="w-full text-xs p-3 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-full text-xs p-3 bg-background border border-border-tactical rounded-xl text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-purple transition-all"
                   />
                 </div>
               </div>
@@ -796,7 +796,7 @@ ${failedList.length > 0
               {/* Right Dropzone File Attachment Area */}
               <div className="flex flex-col justify-between space-y-4">
                 <div className="space-y-1">
-                  <label className="text-xs text-slate-600 dark:text-zinc-400 font-bold">Attach Scratchpad Photo (Max 800KB)</label>
+                  <label className="text-xs text-text-secondary font-bold">Attach Scratchpad Photo (Max 800KB)</label>
                   
                   {/* File Upload drag/drop UI */}
                   <div 
@@ -808,8 +808,8 @@ ${failedList.length > 0
                     className={cn(
                       "border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition-all flex flex-col items-center justify-center min-h-[140px]",
                       dragActive 
-                        ? "border-indigo-500 bg-indigo-50/20 dark:bg-indigo-950/10" 
-                        : "border-slate-300 dark:border-zinc-800 hover:border-indigo-400 text-slate-400 hover:text-indigo-600"
+                        ? "border-accent-purple bg-accent-purple/10 text-accent-purple" 
+                        : "border-border-tactical hover:border-accent-purple text-text-muted hover:text-accent-purple"
                     )}
                   >
                     <input 
@@ -820,11 +820,11 @@ ${failedList.length > 0
                       onChange={(e) => e.target.files && e.target.files[0] && handleFileChange(e.target.files[0])}
                     />
                     
-                    <Upload className="w-8 h-8 mb-2 animate-bounce" />
+                    <Upload className="w-8 h-8 mb-2 animate-bounce animate-duration-1000" />
                     
                     {selectedFile ? (
                       <div className="space-y-1">
-                        <p className="text-xs font-bold text-slate-700 dark:text-zinc-200 truncate max-w-[220px]">
+                        <p className="text-xs font-bold text-text-primary truncate max-w-[220px]">
                           {selectedFile.name}
                         </p>
                         <p className="text-[10px] text-emerald-500 font-bold">
@@ -833,8 +833,8 @@ ${failedList.length > 0
                       </div>
                     ) : (
                       <div>
-                        <p className="text-xs font-bold text-slate-705 dark:text-zinc-300">Drag & Drop scratchpad image here</p>
-                        <p className="text-[10px] text-slate-400 mt-1">or click to browse local files</p>
+                        <p className="text-xs font-bold text-text-secondary">Drag & Drop scratchpad image here</p>
+                        <p className="text-[10px] text-text-muted mt-1">or click to browse local files</p>
                       </div>
                     )}
                   </div>
@@ -843,7 +843,7 @@ ${failedList.length > 0
                 <button
                   type="submit"
                   disabled={!proofTaskTitle.trim()}
-                  className="w-full py-3.5 bg-indigo-600 text-white font-black text-xs uppercase tracking-widest rounded-xl hover:bg-indigo-700 transition-colors disabled:opacity-50"
+                  className="w-full py-3.5 bg-accent-purple text-white font-black text-xs uppercase tracking-widest rounded-xl hover:opacity-90 active:opacity-100 transition-all disabled:opacity-50"
                 >
                   Authorize Proof Submission
                 </button>
@@ -853,10 +853,10 @@ ${failedList.length > 0
 
             {/* Locked Vault Items Showcase Grid */}
             <div className="space-y-4">
-              <h4 className="text-xs uppercase tracking-widest font-black text-slate-400">Vault Ledger Logs ({vaultItems.length})</h4>
+              <h4 className="text-xs uppercase tracking-widest font-black text-text-muted">Vault Ledger Logs ({vaultItems.length})</h4>
               
               {vaultItems.length === 0 ? (
-                <div className="border border-dashed border-slate-200 dark:border-zinc-850 p-8 rounded-2xl text-center text-sm text-slate-450">
+                <div className="border border-dashed border-border-tactical p-8 rounded-2xl text-center text-sm text-text-muted">
                   ⚠️ No proof attachments locked in. Upload your first workout scratchpad above.
                 </div>
               ) : (
@@ -864,18 +864,18 @@ ${failedList.length > 0
                   {vaultItems.map((item) => (
                     <div 
                       key={item.id} 
-                      className="p-5 bg-white dark:bg-zinc-950/40 border border-slate-105 dark:border-zinc-800 rounded-2xl flex gap-4 relative group"
+                      className="p-5 bg-surface border border-border-tactical rounded-2xl flex gap-4 relative group transition-colors duration-300"
                     >
                       <button
                         onClick={() => handleDeleteProof(item.id)}
-                        className="absolute top-3 right-3 p-1.5 text-slate-300 hover:text-red-500 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
+                        className="absolute top-3 right-3 p-1.5 text-text-muted hover:text-accent-red rounded-lg opacity-0 group-hover:opacity-100 transition-all"
                         title="Remove Vault Entry"
                       >
                         <Trash2 size={13} />
                       </button>
 
                       {item.imageDataUrl && (
-                        <div className="w-16 h-16 rounded-xl border overflow-hidden shrink-0 bg-slate-50 dark:bg-zinc-800 self-start">
+                        <div className="w-16 h-16 rounded-xl border border-border-tactical overflow-hidden shrink-0 bg-background self-start">
                           <img 
                             src={item.imageDataUrl} 
                             alt="scratchpad proof" 
@@ -887,17 +887,17 @@ ${failedList.length > 0
 
                       <div className="space-y-1 text-sm min-w-0 flex-1">
                         <div className="flex items-center gap-1.5">
-                          <span className="text-[9px] bg-indigo-50 text-indigo-600 border dark:bg-zinc-800/40 dark:text-indigo-400 font-bold px-1.5 py-0.5 rounded truncate uppercase shrink-0">
+                          <span className="text-[9px] bg-accent-purple/10 text-accent-purple border border-accent-purple/20 font-bold px-1.5 py-0.5 rounded truncate uppercase shrink-0">
                             {item.category}
                           </span>
-                          <span className="text-[10px] text-slate-400 font-mono shrink-0">
+                          <span className="text-[10px] text-text-muted font-mono shrink-0">
                             {format(new Date(item.createdAt), 'MM/dd HH:mm')}
                           </span>
                         </div>
-                        <h5 className="font-extrabold text-slate-850 dark:text-zinc-200 truncate mt-0.5 leading-snug">
+                        <h5 className="font-extrabold text-text-primary truncate mt-0.5 leading-snug">
                           {item.taskTitle}
                         </h5>
-                        <p className="text-xs text-slate-500 dark:text-zinc-400 italic leading-relaxed line-clamp-2">
+                        <p className="text-xs text-text-secondary italic leading-relaxed line-clamp-2">
                           “{item.proofNotes || 'No notes left.'}”
                         </p>
                         {item.fileLink && (
@@ -905,7 +905,7 @@ ${failedList.length > 0
                             href={item.fileLink} 
                             target="_blank" 
                             rel="noreferrer" 
-                            className="text-[10px] text-indigo-500 font-bold block mt-1 hover:underline truncate"
+                            className="text-[10px] text-accent-purple font-bold block mt-1 hover:underline truncate"
                           >
                             🔗 View External Log File
                           </a>
@@ -922,13 +922,13 @@ ${failedList.length > 0
         {/* ============ 3. FINANCIAL STAKES SECTION ============ */}
         {activeSection === 'stakes' && (
           <div className="space-y-6">
-            <div className="flex flex-col md:flex-row md:items-baseline justify-between gap-2 border-b border-slate-105 dark:border-zinc-800/80 pb-4">
+            <div className="flex flex-col md:flex-row md:items-baseline justify-between gap-2 border-b border-border-tactical pb-4">
               <div>
-                <h3 className="text-xl font-bold text-slate-905 dark:text-white flex items-center gap-2">
-                  <DollarSign className="text-emerald-600 dark:text-emerald-500" size={20} />
+                <h3 className="text-xl font-bold text-text-primary flex items-center gap-2">
+                  <DollarSign className="text-accent-purple" size={20} />
                   Financial Escrow (Skin in the Game)
                 </h3>
-                <p className="text-xs text-slate-400 mt-0.5">
+                <p className="text-xs text-text-muted mt-0.5">
                   Leverage raw loss aversion. Fail to defeat your Daily Frog, and you forfeit real cash to deep anti-charities.
                 </p>
               </div>
@@ -939,10 +939,10 @@ ${failedList.length > 0
                   onChange={(e) => handleSaveSettings({ stakesEnabled: e.target.checked })}
                   className="sr-only"
                 />
-                <span className="text-xs font-extrabold uppercase text-slate-400 tracking-wider">Pledge Status:</span>
+                <span className="text-xs font-extrabold uppercase text-text-muted tracking-wider">Pledge Status:</span>
                 <div className={cn(
                   "w-10 h-6 rounded-full p-0.5 transition-colors relative",
-                  settings.stakesEnabled ? "bg-red-600" : "bg-slate-300 dark:bg-zinc-800"
+                  settings.stakesEnabled ? "bg-accent-red" : "bg-surface-elevated border border-border-tactical"
                 )}>
                   <div className={cn(
                     "w-5 h-5 bg-white rounded-full shadow-sm transition-transform",
@@ -955,16 +955,16 @@ ${failedList.length > 0
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
               
               {/* Stakes Settings Configurator */}
-              <div className="space-y-4 p-5 bg-slate-50/60 dark:bg-zinc-950/20 border border-slate-100 dark:border-zinc-850 rounded-2xl">
-                <h4 className="text-xs uppercase tracking-widest font-black text-indigo-500">Stakes Engine Setup</h4>
+              <div className="space-y-4 p-5 bg-surface-elevated/40 border border-border-tactical rounded-2xl transition-colors duration-300">
+                <h4 className="text-xs uppercase tracking-widest font-black text-accent-purple">Stakes Engine Setup</h4>
                 
                 {/* Penalty input */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-600 dark:text-zinc-400 block">
+                  <label className="text-xs font-bold text-text-secondary block">
                     Penalty per Daily Frog Fail
                   </label>
                   <div className="relative">
-                    <span className="absolute left-3 top-3.5 text-slate-400">$</span>
+                    <span className="absolute left-3 top-3.5 text-text-muted">$</span>
                     <input
                       type="number"
                       required
@@ -973,11 +973,11 @@ ${failedList.length > 0
                       value={settings.stakesAmount}
                       disabled={settings.stakesEnabled}
                       onChange={(e) => handleSaveSettings({ stakesAmount: parseInt(e.target.value) || 20 })}
-                      className="w-full text-sm pl-7 pr-3 py-3 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl font-bold dark:text-white disabled:opacity-50"
+                      className="w-full text-sm pl-7 pr-3 py-3 bg-background border border-border-tactical rounded-xl font-bold text-text-primary disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-accent-purple transition-all"
                     />
                   </div>
                   {settings.stakesEnabled && (
-                    <p className="text-[10px] text-red-500 font-semibold mt-1">
+                    <p className="text-[10px] text-accent-red font-semibold mt-1">
                       🔒 Disable pledge above to modify your penalty rate.
                     </p>
                   )}
@@ -985,50 +985,50 @@ ${failedList.length > 0
 
                 {/* Anti Charity Target */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-600 dark:text-zinc-400 block">
+                  <label className="text-xs font-bold text-text-secondary block">
                     Beneficiary Anti-Charity
                   </label>
                   <select
                     value={settings.antiCharity}
                     disabled={settings.stakesEnabled}
                     onChange={(e) => handleSaveSettings({ antiCharity: e.target.value })}
-                    className="w-full text-xs p-3 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl dark:text-white disabled:opacity-50 font-medium"
+                    className="w-full text-xs p-3 bg-background border border-border-tactical rounded-xl text-text-primary disabled:opacity-50 font-medium focus:outline-none"
                   >
                     {ANTI_CHARITIES.map((c) => (
-                      <option key={c} value={c}>{c}</option>
+                      <option className="bg-surface text-text-primary" key={c} value={c}>{c}</option>
                     ))}
                   </select>
                 </div>
               </div>
 
               {/* Status Ledger Monitor Display */}
-              <div className="p-6 bg-rose-950/10 border border-red-500/10 rounded-2xl flex flex-col justify-between h-full space-y-4">
+              <div className="p-6 bg-accent-red/5 border border-accent-red/10 rounded-2xl flex flex-col justify-between h-full space-y-4">
                 <div className="space-y-2">
-                  <span className="text-[9px] font-black uppercase tracking-widest text-red-500 bg-red-500/10 px-2 py-0.5 rounded-full inline-block">
+                  <span className="text-[9px] font-black uppercase tracking-widest text-accent-red bg-accent-red/10 px-2 py-0.5 rounded-full inline-block">
                     Loss Aversion Ledger
                   </span>
                   
                   <div className="flex items-baseline justify-between mt-2">
-                    <span className="text-xs font-bold text-slate-600 dark:text-zinc-400">Pledge Balance Forfeited:</span>
-                    <span className="text-3xl font-black text-white bg-red-600 dark:bg-red-600 px-3 py-1 rounded-xl shadow">
+                    <span className="text-xs font-bold text-text-secondary">Pledge Balance Forfeited:</span>
+                    <span className="text-3xl font-black text-white bg-accent-red px-3 py-1 rounded-xl shadow">
                       ${totalForfeitedStakes}
                     </span>
                   </div>
 
-                  <div className="flex items-center justify-between text-xs pt-1 border-b border-dashed border-red-500/10 pb-2">
-                    <span className="text-slate-500 dark:text-zinc-400">Total Failed Frogs:</span>
-                    <span className="font-bold text-slate-800 dark:text-zinc-105 font-mono">{failedFrogs.length} Frogs</span>
+                  <div className="flex items-center justify-between text-xs pt-1 border-b border-dashed border-border-tactical pb-2">
+                    <span className="text-text-muted">Total Failed Frogs:</span>
+                    <span className="font-bold text-text-primary font-mono">{failedFrogs.length} Frogs</span>
                   </div>
                 </div>
 
                 <div className="space-y-1">
-                  <p className="text-xs font-extrabold text-slate-800 dark:text-zinc-200">Anti-Charity Target Pool:</p>
-                  <p className="text-xs text-red-500/80 dark:text-rose-450 italic font-medium">
+                  <p className="text-xs font-extrabold text-text-primary">Anti-Charity Target Pool:</p>
+                  <p className="text-xs text-accent-red italic font-medium">
                     “{settings.antiCharity}”
                   </p>
                 </div>
 
-                <p className="text-[10px] text-slate-400 dark:text-zinc-500 leading-relaxed font-semibold">
+                <p className="text-[10px] text-text-muted leading-relaxed font-semibold">
                   ⚠️ **Weekly settlement compliance policy**: Every Sunday night, if any Frog fails reconciliation, you must prove you transfered the accumulated amount to the anti-charity to secure board audit clearance.
                 </p>
               </div>
@@ -1039,22 +1039,22 @@ ${failedList.length > 0
 
         {/* ============ 4. BOARD OF DIRECTORS AUDIT ============ */}
         {activeSection === 'audit' && (
-          <div id="board-audit-tab" className="bg-gray-900 p-6 md:p-8 rounded-3xl border border-gray-800 text-gray-100 space-y-6 animate-in fade-in zoom-in-95 duration-200">
+          <div id="board-audit-tab" className="bg-surface p-6 md:p-8 rounded-3xl border border-border-tactical text-text-primary space-y-6 animate-in fade-in zoom-in-95 duration-200 transition-colors duration-300">
             
             {/* 1. The Impending Deadline Banner (Top, Full Width) */}
-            <div className="bg-gray-950/80 border border-amber-500/40 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-lg">
+            <div className="bg-surface-elevated border border-amber-500/30 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm">
               <div className="flex items-center gap-3">
                 <span className="relative flex h-3 w-3">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
                 </span>
-                <span className="text-xs font-black tracking-widest uppercase text-amber-500 font-mono">
+                <span className="text-xs font-black tracking-widest uppercase text-amber-500 dark:text-amber-400 font-mono">
                   WEEK 12 AUDIT: PENDING DISPATCH
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                <Clock className="w-4 h-4 text-amber-500" />
-                <span className="text-sm font-black font-mono tracking-wider text-amber-400">
+                <Clock className="w-4 h-4 text-amber-500 dark:text-amber-400" />
+                <span className="text-sm font-black font-mono tracking-wider text-amber-600 dark:text-amber-400">
                   T-MINUS {countdownStr}
                 </span>
               </div>
@@ -1065,40 +1065,40 @@ ${failedList.length > 0
               
               {/* Column A (Left - 60%) */}
               <div className="lg:col-span-6 space-y-4">
-                <div className="bg-gray-800/80 border border-gray-700/60 rounded-3xl p-6 space-y-6">
+                <div className="bg-surface-elevated/80 border border-border-tactical rounded-3xl p-6 space-y-6">
                   <div>
-                    <h3 className="text-lg font-bold text-gray-100 flex items-center gap-2 tracking-tight">
-                      <FileText className="text-indigo-405" size={18} />
+                    <h3 className="text-lg font-bold text-text-primary flex items-center gap-2 tracking-tight">
+                      <FileText className="text-accent-purple" size={18} />
                       Live Audit Draft
                     </h3>
-                    <p className="text-[11px] text-gray-400 mt-0.5 font-mono">
+                    <p className="text-[11px] text-text-muted mt-0.5 font-mono">
                       What your Board will see on Sunday at 23:59
                     </p>
                   </div>
 
                   {/* High Stakes Harsh Reality Check Mock Metrics */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pb-2 text-xs">
-                    <div className="p-3.5 bg-gray-900/60 border border-gray-700/40 rounded-xl flex items-center justify-between">
-                      <span className="font-medium text-gray-300">Burn Rate Compliance:</span>
-                      <span className="font-bold text-red-400 flex items-center gap-1 font-mono">
+                    <div className="p-3.5 bg-background border border-border-tactical rounded-xl flex items-center justify-between">
+                      <span className="font-medium text-text-secondary">Burn Rate Compliance:</span>
+                      <span className="font-bold text-accent-red flex items-center gap-1 font-mono">
                         🔴 14.2 hours deficit
                       </span>
                     </div>
-                    <div className="p-3.5 bg-gray-900/60 border border-gray-700/40 rounded-xl flex items-center justify-between">
-                      <span className="font-medium text-gray-300">High-Stakes Frogs:</span>
-                      <span className="font-bold text-gray-100 font-mono">
+                    <div className="p-3.5 bg-background border border-border-tactical rounded-xl flex items-center justify-between">
+                      <span className="font-medium text-text-secondary">High-Stakes Frogs:</span>
+                      <span className="font-bold text-text-primary font-mono">
                         Conquered 4/7
                       </span>
                     </div>
-                    <div className="p-3.5 bg-gray-900/60 border border-gray-700/40 rounded-xl flex items-center justify-between">
-                      <span className="font-medium text-gray-300">Financial Escrow:</span>
-                      <span className="font-bold text-red-400 font-mono">
+                    <div className="p-3.5 bg-background border border-border-tactical rounded-xl flex items-center justify-between">
+                      <span className="font-medium text-text-secondary">Financial Escrow:</span>
+                      <span className="font-bold text-accent-red font-mono">
                         Forfeited $20.00
                       </span>
                     </div>
-                    <div className="p-3.5 bg-gray-900/60 border border-gray-700/40 rounded-xl flex items-center justify-between">
-                      <span className="font-medium text-gray-300">Proof Vault Integrity:</span>
-                      <span className="font-bold text-amber-400 flex items-center gap-1 font-mono">
+                    <div className="p-3.5 bg-background border border-border-tactical rounded-xl flex items-center justify-between">
+                      <span className="font-medium text-text-secondary">Proof Vault Integrity:</span>
+                      <span className="font-bold text-amber-500 font-mono">
                         🟡 Missing 1 receipt
                       </span>
                     </div>
@@ -1106,10 +1106,10 @@ ${failedList.length > 0
 
                   {/* Scrollable Live Markdown Document Draft Panel */}
                   <div className="space-y-1">
-                    <span className="text-[10px] uppercase font-black tracking-widest text-gray-400 font-mono">
+                    <span className="text-[10px] uppercase font-black tracking-widest text-text-muted font-mono">
                       Generated Report Content
                     </span>
-                    <div className="text-[11px] font-mono bg-gray-950 p-4 rounded-xl overflow-y-auto text-gray-300 border border-gray-800 max-h-[180px] leading-relaxed select-all">
+                    <div className="text-[11px] font-mono bg-background p-4 rounded-xl overflow-y-auto text-text-secondary border border-border-tactical max-h-[180px] leading-relaxed select-all">
                       <pre className="whitespace-pre-wrap">{generateAuditReport()}</pre>
                     </div>
                   </div>
@@ -1119,16 +1119,16 @@ ${failedList.length > 0
                     <div className={cn(
                       "p-3.5 rounded-xl border text-xs leading-relaxed",
                       emailResult.success 
-                        ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" 
-                        : "bg-red-500/10 border-red-500/20 text-red-400"
+                        ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400" 
+                        : "bg-accent-red/10 border-accent-red/20 text-accent-red"
                     )}>
                       <div className="font-bold flex items-center gap-1.5 mb-1">
-                        {emailResult.success ? <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" /> : <AlertOctagon className="w-4 h-4 shrink-0 text-red-400" />}
+                        {emailResult.success ? <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600 dark:text-emerald-400" /> : <AlertOctagon className="w-4 h-4 shrink-0 text-accent-red" />}
                         {emailResult.success ? "Early Dispatch Transmitted!" : "Auditor Dispatch Assist"}
                       </div>
                       <p className="font-medium text-[11px]">{emailResult.message}</p>
                       {emailResult.suggestedSetup && (
-                        <div className="mt-2 p-2 bg-gray-950 rounded-lg text-[9px] text-gray-400 font-mono leading-normal">
+                        <div className="mt-2 p-2 bg-background rounded-lg text-[9px] text-text-muted font-mono leading-normal">
                           {emailResult.suggestedSetup}
                         </div>
                       )}
@@ -1141,7 +1141,7 @@ ${failedList.length > 0
                       type="button"
                       disabled={isSendingEmail}
                       onClick={() => handleSendDirectEmail()}
-                      className="flex-1 py-3 bg-red-650 hover:bg-red-600 active:bg-red-700 disabled:opacity-40 text-white font-black text-xs uppercase tracking-widest rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 shrink-0"
+                      className="flex-1 py-3 bg-accent-red hover:opacity-90 active:opacity-100 disabled:opacity-40 text-white font-black text-xs uppercase tracking-widest rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 shrink-0"
                     >
                       <Mail size={14} className="stroke-[3]" />
                       {isSendingEmail ? "Dispatching..." : "Force Early Dispatch"}
@@ -1155,7 +1155,7 @@ ${failedList.length > 0
                         localStorage.setItem(`audit_sent_${currentWeekSunday}`, 'true');
                         setAuditSentThisWeek(true);
                       }}
-                      className="py-3 px-4 bg-gray-750 hover:bg-gray-700 hover:text-white transition-all text-gray-350 font-bold text-xs uppercase tracking-wider rounded-xl flex items-center justify-center gap-1.5 shrink-0"
+                      className="py-3 px-4 bg-surface-elevated hover:bg-background border border-border-tactical transition-all text-text-secondary hover:text-text-primary font-bold text-xs uppercase tracking-wider rounded-xl flex items-center justify-center gap-1.5 shrink-0"
                     >
                       via Local Client
                     </button>
@@ -1173,7 +1173,7 @@ ${failedList.length > 0
                         link.click();
                         document.body.removeChild(link);
                       }}
-                      className="p-3 bg-gray-750 hover:bg-gray-700 hover:text-white transition-all text-gray-350 font-bold text-xs uppercase tracking-wider rounded-xl flex items-center justify-center shrink-0"
+                      className="p-3 bg-surface-elevated hover:bg-background border border-border-tactical transition-all text-text-secondary hover:text-text-primary font-bold text-xs uppercase tracking-wider rounded-xl flex items-center justify-center shrink-0"
                       title="Download Markdown Report"
                     >
                       <Download size={14} />
@@ -1186,19 +1186,19 @@ ${failedList.length > 0
               <div className="lg:col-span-4 space-y-4">
                 
                 {/* Board Roster Configuration */}
-                <div className="bg-gray-800/80 border border-gray-700/60 rounded-3xl p-6 space-y-4">
+                <div className="bg-surface-elevated border border-border-tactical rounded-3xl p-6 space-y-4">
                   <div>
-                    <h3 className="text-base font-bold text-gray-100 flex items-center gap-2">
-                      <Users className="text-gray-400" size={16} />
+                    <h3 className="text-base font-bold text-text-primary flex items-center gap-2">
+                      <Users className="text-text-muted" size={16} />
                       Stakeholder Roster
                     </h3>
-                    <p className="text-[11px] text-gray-400 mt-0.5">
+                    <p className="text-[11px] text-text-muted mt-0.5">
                       Configure your board of directors
                     </p>
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-black uppercase text-gray-405 tracking-wider">
+                    <label className="text-[10px] font-black uppercase text-text-muted tracking-wider">
                       Auditor Email Addresses (comma separated)
                     </label>
                     <input
@@ -1207,25 +1207,25 @@ ${failedList.length > 0
                       value={settings.boardEmails}
                       onChange={(e) => handleSaveSettings({ boardEmails: e.target.value })}
                       placeholder="mentor@example.com, peer@example.com"
-                      className="w-full text-xs p-3 bg-gray-955 border border-gray-700 rounded-xl font-bold font-mono text-zinc-100 focus:outline-none focus:border-indigo-500"
+                      className="w-full text-xs p-3 bg-background border border-border-tactical rounded-xl font-bold font-mono text-text-primary focus:outline-none focus:border-accent-purple"
                     />
                   </div>
 
                   {/* Engagement Ledger with mock read statuses */}
                   <div className="space-y-2 pt-2">
-                    <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">
+                    <span className="text-[10px] font-black uppercase text-text-muted tracking-wider">
                       Engagement Ledger
                     </span>
                     <div className="space-y-2 text-xs">
-                      <div className="p-3 bg-gray-900/60 border border-gray-700/30 rounded-xl flex justify-between items-center">
-                        <span className="font-mono text-gray-200">Rishabh (Peer)</span>
-                        <span className="text-[10px] font-bold text-emerald-400 flex items-center gap-1">
+                      <div className="p-3 bg-background border border-border-tactical rounded-xl flex justify-between items-center">
+                        <span className="font-mono text-text-primary">Rishabh (Peer)</span>
+                        <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
                           🟢 Reviewed last week
                         </span>
                       </div>
-                      <div className="p-3 bg-gray-900/60 border border-gray-700/30 rounded-xl flex justify-between items-center">
-                        <span className="font-mono text-gray-200">Dr. Sharma (Mentor)</span>
-                        <span className="text-[10px] font-bold text-red-500 flex items-center gap-1">
+                      <div className="p-3 bg-background border border-border-tactical rounded-xl flex justify-between items-center">
+                        <span className="font-mono text-text-primary">Dr. Sharma (Mentor)</span>
+                        <span className="text-[10px] font-bold text-accent-red flex items-center gap-1">
                           🔴 Did not open last week
                         </span>
                       </div>
@@ -1233,19 +1233,19 @@ ${failedList.length > 0
                   </div>
 
                   {/* subtle tooltip/text explanation */}
-                  <div className="p-3 bg-gray-900/40 border border-gray-800 rounded-xl">
-                    <p className="text-[10px] text-gray-400 leading-normal font-medium">
+                  <div className="p-3 bg-background/40 border border-border-tactical rounded-xl">
+                    <p className="text-[10px] text-text-muted leading-normal font-semibold">
                       ⚠️ Mentors who ignore 2 consecutive reports are automatically flagged for removal.
                     </p>
                   </div>
                 </div>
 
                 {/* Behavioral Help card inside board section */}
-                <div className="p-5 bg-indigo-950/20 border border-dashed border-indigo-500/20 rounded-2xl space-y-3">
-                  <h4 className="text-xs font-black uppercase text-indigo-300 flex items-center gap-1">
-                    <Sparkles size={11} className="text-amber-400 animate-bounce" /> Behavioral Evasion Shields
+                <div className="p-5 bg-accent-purple/5 border border-dashed border-accent-purple/20 rounded-2xl space-y-3">
+                  <h4 className="text-xs font-black uppercase text-accent-purple flex items-center gap-1">
+                    <Sparkles size={11} className="text-amber-500 animate-bounce" /> Behavioral Evasion Shields
                   </h4>
-                  <p className="text-[11px] text-gray-450 leading-relaxed">
+                  <p className="text-[11px] text-text-secondary leading-relaxed">
                     We easily lie to ourselves in dark corners, but looking lazy or erratic in front of high-reputation mentors triggers deep societal compliance drives.
                   </p>
                 </div>
@@ -1260,13 +1260,13 @@ ${failedList.length > 0
         {/* ============ 5. INTENTIONAL ENVIRONMENT CONSTRAINTS ============ */}
         {activeSection === 'constraints' && (
           <div className="space-y-6">
-            <div className="flex flex-col md:flex-row md:items-baseline justify-between gap-2 border-b border-slate-105 dark:border-zinc-805 pb-4">
+            <div className="flex flex-col md:flex-row md:items-baseline justify-between gap-2 border-b border-border-tactical pb-4">
               <div>
-                <h3 className="text-xl font-bold text-slate-905 dark:text-white flex items-center gap-2">
-                  <Globe className="text-indigo-650 dark:text-indigo-400" size={20} />
+                <h3 className="text-xl font-bold text-text-primary flex items-center gap-2">
+                  <Globe className="text-accent-purple" size={20} />
                   Intentional Environment Constraints
                 </h3>
-                <p className="text-xs text-slate-400 mt-0.5">
+                <p className="text-xs text-text-muted mt-0.5">
                   Distraction blocking is not a willpower contest. Configure rules to physically disable access to sinkholes.
                 </p>
               </div>
@@ -1278,10 +1278,10 @@ ${failedList.length > 0
                   onChange={(e) => handleSaveSettings({ restrictionsEnabled: e.target.checked })}
                   className="sr-only"
                 />
-                <span className="text-xs font-extrabold uppercase text-slate-400 tracking-wider">Lockdown Blocklist:</span>
+                <span className="text-xs font-extrabold uppercase text-text-muted tracking-wider">Lockdown Blocklist:</span>
                 <div className={cn(
                   "w-10 h-6 rounded-full p-0.5 transition-colors relative",
-                  settings.restrictionsEnabled ? "bg-red-600" : "bg-slate-300 dark:bg-zinc-800"
+                  settings.restrictionsEnabled ? "bg-accent-red" : "bg-surface-elevated border border-border-tactical"
                 )}>
                   <div className={cn(
                     "w-5 h-5 bg-white rounded-full shadow-sm transition-transform",
@@ -1294,11 +1294,11 @@ ${failedList.length > 0
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
               
               {/* Blocklist input */}
-              <div className="space-y-4 p-5 bg-slate-50/60 dark:bg-zinc-950/20 border border-slate-100 dark:border-zinc-850 rounded-2xl">
-                <h4 className="text-xs uppercase tracking-widest font-black text-indigo-500">Restricted Websites</h4>
+              <div className="space-y-4 p-5 bg-surface-elevated/40 border border-border-tactical rounded-2xl">
+                <h4 className="text-xs uppercase tracking-widest font-black text-accent-purple">Restricted Websites</h4>
                 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-605 dark:text-zinc-400 block">
+                  <label className="text-xs font-bold text-text-secondary block">
                     Distractions Blacklist (comma separated)
                   </label>
                   <textarea
@@ -1306,26 +1306,26 @@ ${failedList.length > 0
                     value={settings.restrictedSites}
                     onChange={(e) => handleSaveSettings({ restrictedSites: e.target.value })}
                     placeholder="youtube.com, reddit.com, twitter.com"
-                    className="w-full text-xs p-3 bg-white dark:bg-zinc-900 border border-slate-205 dark:border-zinc-800 rounded-xl font-bold dark:text-white"
+                    className="w-full text-xs p-3 bg-background border border-border-tactical rounded-xl font-bold text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-purple transition-all"
                   />
                 </div>
 
-                <div className="flex justify-between items-center bg-white dark:bg-zinc-900 p-3 rounded-lg border border-slate-200 dark:border-zinc-800/80">
-                  <span className="text-[10px] font-bold text-slate-500">Active Peak Hours Block:</span>
-                  <span className="text-xs font-black text-rose-500">18:00 - 24:00 Daily</span>
+                <div className="flex justify-between items-center bg-background p-3 rounded-lg border border-border-tactical">
+                  <span className="text-[10px] font-bold text-text-secondary">Active Peak Hours Block:</span>
+                  <span className="text-xs font-black text-accent-red">18:00 - 24:00 Daily</span>
                 </div>
               </div>
 
               {/* Instruction blocks to set up Cold Turkey or Freedom */}
-              <div className="p-5 bg-yellow-500/5 dark:bg-yellow-500/10 border border-yellow-200/50 dark:border-zinc-800 rounded-2xl space-y-4">
-                <h4 className="text-xs font-black uppercase text-amber-600 dark:text-amber-450 flex items-center gap-1.5">
-                  <Shield size={14} className="fill-current text-amber-500 animate-pulse" /> Physical Enforcement Policy
+              <div className="p-5 bg-yellow-500/5 dark:bg-yellow-500/10 border border-yellow-250/20 dark:border-border-tactical rounded-2xl space-y-4">
+                <h4 className="text-xs font-black uppercase text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+                  <Shield size={14} className="fill-current text-amber-500 animate-pulse animate-duration-1000" /> Physical Enforcement Policy
                 </h4>
-                <p className="text-xs text-slate-500 dark:text-zinc-400 leading-relaxed font-semibold">
+                <p className="text-xs text-text-secondary leading-relaxed font-semibold">
                   Software tools like **Cold Turkey (PC)**, **SelfControl (Mac)**, or **Freedom** can lock you out with a completely unrecoverable schedule password:
                 </p>
-                <div className="space-y-2 text-[11px] text-slate-400 dark:text-zinc-500">
-                  <p className="font-bold text-slate-700 dark:text-zinc-300">How to implement physical locking:</p>
+                <div className="space-y-2 text-[11px] text-text-muted">
+                  <p className="font-bold text-text-primary">How to implement physical locking:</p>
                   <ol className="list-decimal list-inside space-y-1.5 pl-1 font-medium">
                     <li>Copy your blacklisted domains above list.</li>
                     <li>Import domains list as a daily block theme inside Cold Turkey.</li>

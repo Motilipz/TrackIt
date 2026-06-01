@@ -13,9 +13,10 @@ export const db = initializeFirestore(app, {
 
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
+googleProvider.addScope('https://www.googleapis.com/auth/drive.file');
 
 // Auth helpers
-export { signInWithPopup, signOut, onAuthStateChanged };
+export { signInWithPopup, signOut, onAuthStateChanged, GoogleAuthProvider };
 export type { User };
 
 // Firestore helpers

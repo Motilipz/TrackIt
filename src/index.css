@@ -3,27 +3,70 @@
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  /* Custom CSS-Variable mappings for Tactical HUD theme */
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-elevated: var(--surface-elevated);
+  --color-accent-purple: var(--accent-purple);
+  --color-accent-red: var(--accent-red);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+  --color-border-tactical: var(--border-tactical);
 }
 
 @custom-variant dark (&:where(.dark, .dark *));
 
 @layer base {
+  :root {
+    --background: #f4f4f5; /* Cool, tactical aluminum (zinc-100) */
+    --surface: #ffffff; /* Stark high-contrast matte white */
+    --surface-elevated: #e4e4e7; /* zinc-200 */
+    --accent-purple: #6b21a8; /* Deep purple */
+    --accent-red: #991b1b; /* Matte blood red */
+    --text-primary: #09090b; /* zinc-950 */
+    --text-secondary: #27272a; /* zinc-800 */
+    --text-muted: #71717a; /* zinc-500 */
+    --border-tactical: #d4d4d8; /* zinc-300 */
+  }
+
+  .dark {
+    --background: #050505; /* Void black */
+    --surface: #0a0a0a; /* Elevated surface card */
+    --surface-elevated: #18181b; /* Subtle secondary elevation */
+    --accent-purple: #9333ea; /* Glowing, vibrant purple */
+    --accent-red: #ef4444; /* Luminous crimson red */
+    --text-primary: #fafafa; /* zinc-50 */
+    --text-secondary: #d4d4d8; /* zinc-300 */
+    --text-muted: #a1a1aa; /* zinc-400 */
+    --border-tactical: #27272a; /* zinc-800 */
+  }
+
   body {
-    @apply bg-slate-50 text-slate-900 antialiased transition-colors duration-300 dark:bg-zinc-950 dark:text-zinc-100;
+    background-color: var(--background);
+    color: var(--text-primary);
+    @apply antialiased transition-colors duration-300;
   }
 }
 
-/* Custom scrollbar */
+/* Custom Tactical Scrollbars and selection */
 ::selection {
-  @apply bg-indigo-100 text-indigo-900 dark:bg-indigo-900/30 dark:text-indigo-100;
+  background-color: var(--accent-purple);
+  color: var(--surface);
 }
 
 ::-webkit-scrollbar {
   width: 8px;
 }
 ::-webkit-scrollbar-track {
-  @apply bg-transparent;
+  background-color: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  @apply bg-slate-300 rounded-full hover:bg-slate-400 transition-colors dark:bg-zinc-800 dark:hover:bg-zinc-700;
+  background-color: var(--border-tactical);
+  border-radius: 9999px;
+  transition: background-color 0.3s ease;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--text-muted);
 }
