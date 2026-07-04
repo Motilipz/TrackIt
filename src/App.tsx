@@ -2392,6 +2392,7 @@ function AppContent() {
               user={user}
               dailyTasks={dailyTasks}
               logs={logs}
+              readingLogs={readingLogs}
             />
           )}
 

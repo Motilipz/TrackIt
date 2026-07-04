@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { db } from '../firebase';
 import { doc, setDoc, collection, addDoc, getDocs, deleteDoc, onSnapshot, query, where } from 'firebase/firestore';
-import { DailyTask, StudyLog } from '../types';
+import { DailyTask, StudyLog, ReadingLog } from '../types';
 import { format, differenceInDays, subDays } from 'date-fns';
 
 const cn = (...classes: (string | undefined | null | boolean)[]) => {
@@ -40,6 +40,7 @@ interface AccountabilityCockpitProps {
   user: any;
   dailyTasks: DailyTask[];
   logs: StudyLog[];
+  readingLogs?: ReadingLog[];
 }
 
 const DEFAULT_ACCOUNTABILITY: AccountabilitySettings = {
@@ -71,7 +72,8 @@ const getWeekId = (date: Date) => {
 export const AccountabilityCockpit: React.FC<AccountabilityCockpitProps> = ({
   user,
   dailyTasks,
-  logs
+  logs,
+  readingLogs = []
 }) => {
   const [settings, setSettings] = useState<AccountabilitySettings>(() => ({
     ...DEFAULT_ACCOUNTABILITY,
@@ -266,8 +268,10 @@ export const AccountabilityCockpit: React.FC<AccountabilityCockpitProps> = ({
   const today = new Date();
   const daysRemaining = Math.max(1, differenceInDays(targetDate, today));
 
-  // Study log hours computed
-  const accomplishedHours = logs.reduce((acc, log) => acc + (log.duration || 0), 0) / 60;
+  // Study log hours and active reading log hours computed
+  const studyMinutes = logs.reduce((acc, log) => acc + (log.duration || 0), 0);
+  const readingMinutes = readingLogs.reduce((acc, rLog) => acc + Math.floor((rLog.duration || 0) / 60), 0);
+  const accomplishedHours = (studyMinutes + readingMinutes) / 60;
   const remainingHours = Math.max(0, settings.burnGoalHours - accomplishedHours);
   const dailyBurnRate = (remainingHours / daysRemaining);
 
