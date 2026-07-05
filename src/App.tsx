@@ -195,6 +195,47 @@ const getCategoryColor = (cat: string) => CATEGORY_COLORS[cat] || '#10b981';
 
 const COLORS = ['#6366f1', '#8b5cf6', '#ec4899', '#f43f5e', '#f59e0b', '#10b981', '#3b82f6', '#06b6d4', '#84cc16', '#f97316'];
 
+const parseFirestoreDate = (fieldVal: any): Date => {
+  if (!fieldVal) return new Date();
+  if (fieldVal instanceof Date) {
+    return isNaN(fieldVal.getTime()) ? new Date() : fieldVal;
+  }
+  if (typeof fieldVal.toDate === 'function') {
+    try {
+      const d = fieldVal.toDate();
+      return isNaN(d.getTime()) ? new Date() : d;
+    } catch {
+      return new Date();
+    }
+  }
+  if (typeof fieldVal === 'object') {
+    if (typeof fieldVal.seconds === 'number') {
+      return new Date(fieldVal.seconds * 1000);
+    }
+    if (typeof fieldVal._seconds === 'number') {
+      return new Date(fieldVal._seconds * 1000);
+    }
+  }
+  const parsed = new Date(fieldVal);
+  return isNaN(parsed.getTime()) ? new Date() : parsed;
+};
+
+const safeGetTime = (dateVal: any): number => {
+  if (!dateVal) return 0;
+  const d = parseFirestoreDate(dateVal);
+  return d.getTime();
+};
+
+const safeFormatDate = (dateVal: any, formatStr: string, fallback: string = 'Invalid Date'): string => {
+  if (!dateVal) return fallback;
+  const d = parseFirestoreDate(dateVal);
+  try {
+    return format(d, formatStr);
+  } catch {
+    return fallback;
+  }
+};
+
 // Error Boundary Component
 class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean; error: Error | null }> {
   constructor(props: { children: React.ReactNode }) {
@@ -308,6 +349,7 @@ function AppContent() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
+  const [importSuccess, setImportSuccess] = useState<string | null>(null);
 
   // Verification pipeline states
   const [isVerified, setIsVerified] = useState(false);
@@ -369,8 +411,8 @@ function AppContent() {
         return {
           id: doc.id,
           ...data,
-          date: data.date?.toDate ? data.date.toDate() : (data.date ? new Date(data.date) : new Date()),
-          createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : (data.createdAt ? new Date(data.createdAt) : new Date())
+          date: parseFirestoreDate(data.date),
+          createdAt: parseFirestoreDate(data.createdAt)
         } as StudyLog;
       });
       setLogs(newLogs);
@@ -398,8 +440,8 @@ function AppContent() {
         return {
           id: doc.id,
           ...data,
-          date: data.date?.toDate ? data.date.toDate() : (data.date ? new Date(data.date) : new Date()),
-          createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : (data.createdAt ? new Date(data.createdAt) : new Date())
+          date: parseFirestoreDate(data.date),
+          createdAt: parseFirestoreDate(data.createdAt)
         } as unknown as ReadingLog;
       });
       setReadingLogs(newLogs);
@@ -482,7 +524,7 @@ function AppContent() {
     if (logs.length === 0) return 0;
     
     const uniqueDates = Array.from(new Set(
-      logs.map(log => format(log.date, 'yyyy-MM-dd'))
+      logs.map(log => safeFormatDate(log.date, 'yyyy-MM-dd'))
     )).sort((a, b) => b.localeCompare(a));
 
     let currentStreak = 0;
@@ -947,13 +989,13 @@ function AppContent() {
     const combinedLogs = [
       ...logs.map(l => ({ date: l.date, category: l.category, duration: l.duration, notes: l.notes || "", type: 'Study' })),
       ...readingLogs.map(l => ({ date: l.date, category: l.domain, duration: Math.floor(l.duration / 60), notes: l.comprehensionSummary, type: 'Reading' }))
-    ].sort((a, b) => b.date.getTime() - a.date.getTime());
+    ].sort((a, b) => safeGetTime(b.date) - safeGetTime(a.date));
 
     if (combinedLogs.length === 0) return;
     
     const headers = ["Date", "Type", "Category/Domain", "Duration (min)", "Performance/Notes"];
     const rows = combinedLogs.map(log => [
-      format(log.date, 'yyyy-MM-dd'),
+      safeFormatDate(log.date, 'yyyy-MM-dd'),
       log.type,
       log.category,
       log.duration,
@@ -1002,8 +1044,14 @@ function AppContent() {
 
     setIsImporting(true);
     setImportError(null);
+    setImportSuccess(null);
 
     const reader = new FileReader();
+    reader.onerror = () => {
+      setImportError("Failed to read backup file.");
+      setIsImporting(false);
+    };
+
     reader.onload = async (event) => {
       try {
         const content = event.target?.result as string;
@@ -1029,7 +1077,8 @@ function AppContent() {
           throw new Error("Invalid file format. Expected an array or a structured backup object.");
         }
 
-        let batch = writeBatch(db);
+        const batches: any[] = [];
+        let currentBatch = writeBatch(db);
         let count = 0;
         let totalCount = 0;
         let studyCount = 0;
@@ -1045,7 +1094,7 @@ function AppContent() {
           // Convert date string back to Timestamp
           const logDate = new Date(log.date);
           
-          batch.set(logRef, {
+          currentBatch.set(logRef, {
             userId: user.uid,
             category: String(log.category),
             duration: Number(log.duration),
@@ -1069,10 +1118,8 @@ function AppContent() {
           
           // Firestore batch limit is 500
           if (count >= 400) {
-            await batch.commit();
-            // Small delay to keep UI responsive
-            await new Promise(resolve => setTimeout(resolve, 50));
-            batch = writeBatch(db);
+            batches.push(currentBatch);
+            currentBatch = writeBatch(db);
             count = 0;
           }
         }
@@ -1085,7 +1132,7 @@ function AppContent() {
           const rLogRef = doc(collection(db, 'users', user.uid, 'readingLogs'));
           const rLogDate = new Date(rLog.date);
 
-          batch.set(rLogRef, {
+          currentBatch.set(rLogRef, {
             userId: user.uid,
             title: rLog.title ? String(rLog.title) : 'Untitled Excerpt',
             excerpt: rLog.excerpt ? String(rLog.excerpt) : '',
@@ -1106,15 +1153,19 @@ function AppContent() {
           totalCount++;
 
           if (count >= 400) {
-            await batch.commit();
-            await new Promise(resolve => setTimeout(resolve, 50));
-            batch = writeBatch(db);
+            batches.push(currentBatch);
+            currentBatch = writeBatch(db);
             count = 0;
           }
         }
 
         if (count > 0) {
-          await batch.commit();
+          batches.push(currentBatch);
+        }
+
+        // Execute all batch commits in parallel to minimize latency
+        if (batches.length > 0) {
+          await Promise.all(batches.map(b => b.commit()));
         }
         
         let msg = `Successfully imported ${totalCount} logs!`;
@@ -1125,12 +1176,18 @@ function AppContent() {
         } else if (readingCount > 0) {
           msg = `Successfully imported ${readingCount} RVM reading logs!`;
         }
-        alert(msg);
+        
+        // Disable importing state BEFORE showing messages to prevent freezing of visual state
+        setIsImporting(false);
+        setImportSuccess(msg);
+        
+        // Auto-clear success message after 8 seconds
+        setTimeout(() => setImportSuccess(null), 8000);
+        
         e.target.value = ''; // Reset input
       } catch (err) {
         console.error("Import error:", err);
         setImportError(err instanceof Error ? err.message : "Failed to import logs.");
-      } finally {
         setIsImporting(false);
       }
     };
@@ -1168,7 +1225,7 @@ function AppContent() {
     const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
     for (const log of logs) {
-      const logDateStr = format(log.date, 'yyyy-MM-dd');
+      const logDateStr = safeFormatDate(log.date, 'yyyy-MM-dd');
       const duration = log.duration;
       
       totalMinutes += duration;
@@ -1224,7 +1281,7 @@ function AppContent() {
     }
 
     for (const rLog of readingLogs) {
-      const logDateStr = format(rLog.date, 'yyyy-MM-dd');
+      const logDateStr = safeFormatDate(rLog.date, 'yyyy-MM-dd');
       const durationMins = Math.floor(rLog.duration / 60);
       
       totalMinutes += durationMins;
@@ -1304,7 +1361,7 @@ function AppContent() {
 
     const readingTrendData = readingLogs.slice().reverse().map(log => {
       const entry: any = {
-        date: format(log.date, 'MMM dd'),
+        date: safeFormatDate(log.date, 'MMM dd'),
         wpm: log.wpm,
         target: 350
       };
@@ -1379,26 +1436,12 @@ function AppContent() {
     const dailyMinutesMap = new Map<string, number>();
 
     validLogs.forEach(log => {
-      let dateStr = '';
-      if (log.date instanceof Date) {
-        dateStr = format(log.date, 'yyyy-MM-dd');
-      } else if (log.date && typeof (log.date as any).toDate === 'function') {
-        dateStr = format((log.date as any).toDate(), 'yyyy-MM-dd');
-      } else {
-        dateStr = format(new Date(log.date), 'yyyy-MM-dd');
-      }
+      const dateStr = safeFormatDate(log.date, 'yyyy-MM-dd');
       dailyMinutesMap.set(dateStr, (dailyMinutesMap.get(dateStr) || 0) + (log.duration || 0));
     });
 
     validReadingLogs.forEach(rLog => {
-      let dateStr = '';
-      if (rLog.date instanceof Date) {
-        dateStr = format(rLog.date, 'yyyy-MM-dd');
-      } else if (rLog.date && typeof (rLog.date as any).toDate === 'function') {
-        dateStr = format((rLog.date as any).toDate(), 'yyyy-MM-dd');
-      } else {
-        dateStr = format(new Date(rLog.date), 'yyyy-MM-dd');
-      }
+      const dateStr = safeFormatDate(rLog.date, 'yyyy-MM-dd');
       const rDurationMins = Math.floor((rLog.duration || 0) / 60) || 1;
       dailyMinutesMap.set(dateStr, (dailyMinutesMap.get(dateStr) || 0) + rDurationMins);
     });
@@ -2370,9 +2413,9 @@ function AppContent() {
                     {[
                       ...logs.map(l => ({ ...l, logType: 'Study' as const })),
                       ...readingLogs.map(l => ({ ...l, logType: 'Reading' as const, category: l.domain, duration: Math.floor(l.duration / 60), notes: l.comprehensionSummary }))
-                    ].sort((a, b) => (b.date?.getTime() || 0) - (a.date?.getTime() || 0)).map((item, idx) => (
+                    ].sort((a, b) => safeGetTime(b.date) - safeGetTime(a.date)).map((item, idx) => (
                       <tr key={`${item.id || idx}-${idx}`} className="hover:bg-slate-50 dark:hover:bg-zinc-800 transition-colors">
-                        <td className="px-6 py-4 text-sm text-slate-600 dark:text-zinc-400">{item.date ? format(item.date, 'MMM d, yyyy') : 'Invalid Date'}</td>
+                        <td className="px-6 py-4 text-sm text-slate-600 dark:text-zinc-400">{safeFormatDate(item.date, 'MMM d, yyyy')}</td>
                         <td className="px-6 py-4">
                           <span className={cn(
                             "px-3 py-1 text-xs font-bold rounded-full",
@@ -2738,6 +2781,9 @@ function AppContent() {
                     </label>
                     {importError && (
                       <p className="mt-2 text-xs text-red-600 dark:text-red-400 font-medium">{importError}</p>
+                    )}
+                    {importSuccess && (
+                      <p className="mt-2 text-xs text-emerald-600 dark:text-emerald-400 font-medium">{importSuccess}</p>
                     )}
                   </div>
                 </div>
