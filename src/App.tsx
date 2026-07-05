@@ -972,14 +972,20 @@ function AppContent() {
   };
 
   const handleExportJSON = () => {
-    if (logs.length === 0) return;
+    if (logs.length === 0 && readingLogs.length === 0) return;
     
-    // Convert logs to a format that's easy to import back
-    const dataStr = JSON.stringify(logs, null, 2);
+    // Convert both study logs and reading velocity logs to a format that's easy to import back
+    const exportData = {
+      version: 2,
+      studyLogs: logs,
+      readingLogs: readingLogs
+    };
+
+    const dataStr = JSON.stringify(exportData, null, 2);
     const blob = new Blob([dataStr], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     
-    const exportFileDefaultName = `cat-prep-logs-${format(new Date(), 'yyyy-MM-dd')}.json`;
+    const exportFileDefaultName = `cat-prep-backup-${format(new Date(), 'yyyy-MM-dd')}.json`;
     
     const linkElement = document.createElement('a');
     linkElement.setAttribute('href', url);
@@ -1001,17 +1007,36 @@ function AppContent() {
     reader.onload = async (event) => {
       try {
         const content = event.target?.result as string;
-        const importedLogs = JSON.parse(content);
+        const importedData = JSON.parse(content);
 
-        if (!Array.isArray(importedLogs)) {
-          throw new Error("Invalid file format. Expected an array of logs.");
+        let importedStudyLogs: any[] = [];
+        let importedReadingLogs: any[] = [];
+
+        if (Array.isArray(importedData)) {
+          // Backward compatibility: old format is just an array of study logs
+          importedStudyLogs = importedData;
+        } else if (importedData && typeof importedData === 'object') {
+          if (Array.isArray(importedData.studyLogs)) {
+            importedStudyLogs = importedData.studyLogs;
+          }
+          if (Array.isArray(importedData.readingLogs)) {
+            importedReadingLogs = importedData.readingLogs;
+          }
+          if (!Array.isArray(importedData.studyLogs) && !Array.isArray(importedData.readingLogs)) {
+            throw new Error("Invalid file format. Expected a structured backup or list of logs.");
+          }
+        } else {
+          throw new Error("Invalid file format. Expected an array or a structured backup object.");
         }
 
         let batch = writeBatch(db);
         let count = 0;
         let totalCount = 0;
+        let studyCount = 0;
+        let readingCount = 0;
 
-        for (const log of importedLogs) {
+        // 1. Import Study Logs
+        for (const log of importedStudyLogs) {
           // Basic validation
           if (!log.category || !log.duration || !log.date) continue;
 
@@ -1029,11 +1054,17 @@ function AppContent() {
             rating: Number(log.rating || 3),
             startTime: log.startTime ? String(log.startTime) : null,
             endTime: log.endTime ? String(log.endTime) : null,
-            createdAt: Timestamp.now(),
+            isVerified: log.isVerified === true,
+            isUnverifiedSession: log.isUnverifiedSession !== undefined ? !!log.isUnverifiedSession : !log.isVerified,
+            takeawayInsight: log.takeawayInsight ? String(log.takeawayInsight) : '',
+            proofImageName: log.proofImageName ? String(log.proofImageName) : '',
+            driveFileUrl: log.driveFileUrl ? String(log.driveFileUrl) : '',
+            createdAt: log.createdAt ? Timestamp.fromDate(new Date(log.createdAt)) : Timestamp.now(),
             updatedAt: Timestamp.now()
           });
           
           count++;
+          studyCount++;
           totalCount++;
           
           // Firestore batch limit is 500
@@ -1046,11 +1077,55 @@ function AppContent() {
           }
         }
 
+        // 2. Import Reading Velocity Logs (RVM)
+        for (const rLog of importedReadingLogs) {
+          // Basic validation
+          if (!rLog.domain || !rLog.duration || !rLog.date) continue;
+
+          const rLogRef = doc(collection(db, 'users', user.uid, 'readingLogs'));
+          const rLogDate = new Date(rLog.date);
+
+          batch.set(rLogRef, {
+            userId: user.uid,
+            title: rLog.title ? String(rLog.title) : 'Untitled Excerpt',
+            excerpt: rLog.excerpt ? String(rLog.excerpt) : '',
+            wordCount: rLog.wordCount ? Number(rLog.wordCount) : 0,
+            duration: rLog.duration ? Number(rLog.duration) : 0,
+            wpm: rLog.wpm ? Number(rLog.wpm) : 0,
+            gradeLevel: rLog.gradeLevel ? Number(rLog.gradeLevel) : 10,
+            comprehensionSummary: rLog.comprehensionSummary ? String(rLog.comprehensionSummary) : '',
+            domain: String(rLog.domain),
+            isJunkSession: rLog.isJunkSession !== undefined ? !!rLog.isJunkSession : (Number(rLog.wpm) > 800),
+            date: Timestamp.fromDate(rLogDate),
+            createdAt: rLog.createdAt ? Timestamp.fromDate(new Date(rLog.createdAt)) : Timestamp.now(),
+            updatedAt: Timestamp.now()
+          });
+
+          count++;
+          readingCount++;
+          totalCount++;
+
+          if (count >= 400) {
+            await batch.commit();
+            await new Promise(resolve => setTimeout(resolve, 50));
+            batch = writeBatch(db);
+            count = 0;
+          }
+        }
+
         if (count > 0) {
           await batch.commit();
         }
         
-        alert(`Successfully imported ${totalCount} logs!`);
+        let msg = `Successfully imported ${totalCount} logs!`;
+        if (studyCount > 0 && readingCount > 0) {
+          msg = `Successfully imported ${totalCount} logs (${studyCount} study logs, ${readingCount} RVM reading logs)!`;
+        } else if (studyCount > 0) {
+          msg = `Successfully imported ${studyCount} study logs!`;
+        } else if (readingCount > 0) {
+          msg = `Successfully imported ${readingCount} RVM reading logs!`;
+        }
+        alert(msg);
         e.target.value = ''; // Reset input
       } catch (err) {
         console.error("Import error:", err);
@@ -2620,7 +2695,7 @@ function AppContent() {
                       <h3 className="font-bold dark:text-white">Export Logs</h3>
                     </div>
                     <p className="text-sm text-slate-500 dark:text-zinc-400 mb-6 flex-grow">
-                      Download all your study logs as a JSON file. This is perfect for backups or migrating to a new device.
+                      Download all your study logs and RVM reading velocity logs as a unified JSON backup. This is perfect for backups or migrating to a new device.
                     </p>
                     <button 
                       onClick={handleExportJSON}
@@ -2639,7 +2714,7 @@ function AppContent() {
                       <h3 className="font-bold dark:text-white">Import Logs</h3>
                     </div>
                     <p className="text-sm text-slate-500 dark:text-zinc-400 mb-6 flex-grow">
-                      Migrate your data from a previous version or restore a backup. This will append logs to your current list.
+                      Migrate your data from a previous version or restore a backup. This will append both study logs and RVM reading velocity logs to your current lists.
                     </p>
                     <label className="block cursor-pointer">
                       <div className={cn(
