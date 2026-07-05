@@ -419,7 +419,7 @@ export const TimerCard = ({
         category,
         duration: Math.floor(timer.elapsedTime / 60) || 1, // Store in minutes, min 1m
         date: Timestamp.now(),
-        notes: `${notes}${takeaways ? '\nTakeaways: ' + takeaways : ''}${sillyMistakes ? '\nSilly Mistakes: ' + sillyMistakes : ''}${strategicTag ? '\nStrategy: ' + strategicTag : ''}${isUnverifiedSession ? ' (UNVERIFIED AUTO-HALTED)' : ''}`,
+        notes: `${notes}${takeaways ? '\nTakeaways: ' + takeaways : ''}${sillyMistakes ? '\nSilly Mistakes: ' + sillyMistakes : ''}${strategicTag ? '\nStrategy: ' + strategicTag : ''}${isUnverifiedSession ? ' (UNVERIFIED AUTO-HALTED)' : ''}`.slice(0, 1000),
         rating,
         isUnverifiedSession,
         createdAt: Timestamp.now(),

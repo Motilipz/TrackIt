@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { DailyTask } from '../types';
+import { RoutineDeployer, BlueprintTask } from './RoutineDeployer';
 
 // Simple class utility helper
 const cn = (...classes: (string | undefined | null | boolean)[]) => {
@@ -55,6 +56,13 @@ export const ActionPlanView: React.FC<ActionPlanViewProps> = ({
   onReorderTasks,
   onReconcileTask,
 }) => {
+  const handleDeployToMainPlan = async (blueprint: BlueprintTask[]) => {
+    // Sequentially add each blueprint item to Firestore
+    for (const item of blueprint) {
+      await onAddTask(item.title, item.category, !!item.isFrog, item.estimatedDuration);
+    }
+  };
+
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState('QA');
   const [estimatedDuration, setEstimatedDuration] = useState<number>(60);
@@ -379,6 +387,9 @@ export const ActionPlanView: React.FC<ActionPlanViewProps> = ({
           )}
         </div>
       </div>
+
+      {/* Routine Blueprint Deployer Panel */}
+      <RoutineDeployer onDeployToMainPlan={handleDeployToMainPlan} />
 
       {/* Input Bar Card */}
       <div className="bg-white dark:bg-zinc-900 rounded-3xl p-6 border border-slate-100 dark:border-zinc-800 shadow-sm relative">

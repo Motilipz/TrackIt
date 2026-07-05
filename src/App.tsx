@@ -262,6 +262,8 @@ function AppContent() {
   const { theme, setTheme, resolvedTheme } = useTheme();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
   const [logs, setLogs] = useState<StudyLog[]>([]);
   const [readingLogs, setReadingLogs] = useState<ReadingLog[]>([]);
   const [categories, setCategories] = useState<string[]>(DEFAULT_CATEGORIES);
@@ -367,8 +369,8 @@ function AppContent() {
         return {
           id: doc.id,
           ...data,
-          date: data.date.toDate(),
-          createdAt: data.createdAt.toDate()
+          date: data.date?.toDate ? data.date.toDate() : (data.date ? new Date(data.date) : new Date()),
+          createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : (data.createdAt ? new Date(data.createdAt) : new Date())
         } as StudyLog;
       });
       setLogs(newLogs);
@@ -396,8 +398,8 @@ function AppContent() {
         return {
           id: doc.id,
           ...data,
-          date: data.date.toDate(),
-          createdAt: data.createdAt.toDate()
+          date: data.date?.toDate ? data.date.toDate() : (data.date ? new Date(data.date) : new Date()),
+          createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : (data.createdAt ? new Date(data.createdAt) : new Date())
         } as unknown as ReadingLog;
       });
       setReadingLogs(newLogs);
@@ -530,6 +532,9 @@ function AppContent() {
   };
 
   const handleLogin = async () => {
+    if (isLoggingIn) return;
+    setIsLoggingIn(true);
+    setLoginError(null);
     try {
       const result = await signInWithPopup(auth, googleProvider);
       const credential = GoogleAuthProvider.credentialFromResult(result);
@@ -538,8 +543,19 @@ function AppContent() {
         localStorage.setItem('google_access_token', credential.accessToken);
         localStorage.setItem('google_access_token_expiry', (Date.now() + 3500 * 1000).toString());
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Login failed:", error);
+      if (error?.code === 'auth/cancelled-popup-request' || error?.message?.includes('cancelled-popup-request')) {
+        setLoginError("A previous sign-in popup request was cancelled or was already pending. Please try again.");
+      } else if (error?.code === 'auth/popup-closed-by-user' || error?.message?.includes('popup-closed-by-user')) {
+        setLoginError("The login popup was closed before completing. Please try again.");
+      } else if (error?.code === 'auth/popup-blocked' || error?.message?.includes('popup-blocked')) {
+        setLoginError("The login popup was blocked by your browser. Please enable popups or try opening the app in a new tab.");
+      } else {
+        setLoginError(error?.message || "An error occurred during sign-in. Please try again.");
+      }
+    } finally {
+      setIsLoggingIn(false);
     }
   };
 
@@ -571,6 +587,45 @@ function AppContent() {
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       handleFileChange(e.dataTransfer.files[0]);
     }
+  };
+
+  // Utility to compress image to Base64 (max 600px, 0.6 quality) to bypass 403 Google Drive restrictions gracefully
+  const compressImageToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          const maxDim = 600;
+          if (width > maxDim || height > maxDim) {
+            if (width > height) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            } else {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
+          }
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            const compressed = canvas.toDataURL('image/jpeg', 0.6);
+            resolve(compressed);
+          } else {
+            resolve(e.target?.result as string || "");
+          }
+        };
+        img.onerror = () => reject(new Error("Failed to load image"));
+        img.src = e.target?.result as string;
+      };
+      reader.onerror = () => reject(new Error("Failed to read file"));
+      reader.readAsDataURL(file);
+    });
   };
 
   // Isolated asynchronous function to check / create folder on Google Drive
@@ -727,16 +782,25 @@ function AppContent() {
 
     setIsSubmitting(true);
     let finalDriveUrl = driveFileUrl;
+    let fallbackUsed = false;
 
     if (isVerified && proofImage) {
       try {
         finalDriveUrl = await uploadToGoogleDrive(proofImage, googleAccessToken!);
         setDriveFileUrl(finalDriveUrl);
       } catch (uploadError) {
-        setFormError("Google Drive Upload has failed. Please verify credentials/network.");
-        setTimeout(() => setFormError(null), 4000);
-        setIsSubmitting(false);
-        return;
+        console.warn("Google Drive upload failed. Engaging local Base64 sandbox fallback...", uploadError);
+        try {
+          const base64Data = await compressImageToBase64(proofImage);
+          finalDriveUrl = base64Data;
+          setDriveFileUrl(base64Data);
+          fallbackUsed = true;
+        } catch (compressError) {
+          setFormError("Both Google Drive upload and local fallback storage compression failed.");
+          setTimeout(() => setFormError(null), 4000);
+          setIsSubmitting(false);
+          return;
+        }
       }
     }
 
@@ -757,7 +821,7 @@ function AppContent() {
         isVerified,
         isUnverifiedSession: !isVerified,
         takeawayInsight: isVerified ? takeawayInsight : "",
-        proofImageName: isVerified && proofImage ? proofImage.name : (isVerified && finalDriveUrl ? "Google Drive Proof" : ""),
+        proofImageName: isVerified && proofImage ? (fallbackUsed ? `${proofImage.name} (Sandbox Local)` : proofImage.name) : (isVerified && finalDriveUrl ? "Google Drive Proof" : ""),
         driveFileUrl: isVerified ? finalDriveUrl : "",
         updatedAt: Timestamp.now()
       };
@@ -774,6 +838,11 @@ function AppContent() {
         });
       }
       
+      if (fallbackUsed) {
+        setFormError("⚠️ Google Drive 403 Forbidden: Saved successfully to Local Sandbox instead!");
+        setTimeout(() => setFormError(null), 6000);
+      }
+      
       setNotes('');
       setIsVerified(false);
       setProofImage(null);
@@ -782,7 +851,15 @@ function AppContent() {
       setEditingLogId(null);
       setActiveTab('dashboard');
     } catch (error) {
-      handleFirestoreError(error, editingLogId ? OperationType.UPDATE : OperationType.CREATE, path);
+      console.error("Error saving study log to Firestore:", error);
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      setFormError(`Save failed: ${errorMsg}`);
+      setTimeout(() => setFormError(null), 8000);
+      try {
+        handleFirestoreError(error, editingLogId ? OperationType.UPDATE : OperationType.CREATE, path);
+      } catch (logErr) {
+        // Log the structural error diagnostic to console, but don't crash
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -1332,12 +1409,46 @@ function AppContent() {
           </div>
           <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">CAT Prep Tracker</h1>
           <p className="text-slate-500 dark:text-zinc-400 mb-8">Master your preparation with data-driven insights. Log your study hours and track your progress.</p>
+          
+          {loginError && (
+            <div className="mb-6 p-4 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/30 rounded-2xl text-left">
+              <div className="flex gap-2 items-start">
+                <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-semibold text-red-800 dark:text-red-300">Authentication Error</p>
+                  <p className="text-xs text-red-600 dark:text-red-400 mt-1 leading-relaxed">{loginError}</p>
+                </div>
+              </div>
+              <div className="mt-4 pt-4 border-t border-red-200/50 dark:border-red-900/10 flex flex-col gap-2">
+                <p className="text-xs text-slate-500 dark:text-zinc-400">
+                  Are you in a sandboxed iframe? Opening the app directly in a new tab bypasses browser popup restrictions.
+                </p>
+                <a
+                  href={window.location.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full text-center py-2.5 px-4 bg-slate-50 dark:bg-zinc-800 hover:bg-slate-100 dark:hover:bg-zinc-700/50 border border-slate-200 dark:border-zinc-700 text-slate-700 dark:text-zinc-300 font-bold text-xs rounded-xl transition-colors inline-block"
+                >
+                  Open in New Tab & Sign In
+                </a>
+              </div>
+            </div>
+          )}
+
           <button
             onClick={handleLogin}
-            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-4 px-6 rounded-2xl transition-all flex items-center justify-center gap-3 shadow-lg shadow-indigo-200 dark:shadow-none"
+            disabled={isLoggingIn}
+            className={cn(
+              "w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-4 px-6 rounded-2xl transition-all flex items-center justify-center gap-3 shadow-lg shadow-indigo-200 dark:shadow-none",
+              isLoggingIn ? "opacity-70 cursor-not-allowed" : ""
+            )}
           >
-            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/layout/google.svg" alt="Google" className="w-6 h-6 bg-white rounded-full p-1" />
-            Sign in with Google
+            {isLoggingIn ? (
+              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+            ) : (
+              <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/layout/google.svg" alt="Google" className="w-6 h-6 bg-white rounded-full p-1" />
+            )}
+            {isLoggingIn ? "Signing in..." : "Sign in with Google"}
           </button>
         </div>
       </div>
@@ -1959,7 +2070,8 @@ function AppContent() {
                   <label className="text-xs uppercase tracking-wider font-semibold text-text-secondary">Notes</label>
                   <textarea 
                     value={notes} 
-                    onChange={(e) => setNotes(e.target.value)}
+                    onChange={(e) => setNotes(e.target.value.slice(0, 1000))}
+                    maxLength={1000}
                     rows={3}
                     className="w-full p-3 bg-background border border-border-tactical rounded-xl focus:outline-none focus:ring-2 focus:ring-accent-purple text-text-primary font-sans resize-none transition-colors"
                     placeholder="Describe what study materials or concepts were covered..."

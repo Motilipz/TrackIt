@@ -34,7 +34,6 @@ export const ArenaBoard = ({ user, totalHours, streak, tasksCompleted, wpm }: Ar
 
       const logsQ = query(
         collection(db, 'users', candidate.userId, 'logs'),
-        where('isVerified', '==', true),
         orderBy('date', 'desc')
       );
 
@@ -47,7 +46,7 @@ export const ArenaBoard = ({ user, totalHours, streak, tasksCompleted, wpm }: Ar
             date: data.date?.toDate ? data.date.toDate() : new Date(data.date || Date.now()),
             createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt || Date.now())
           } as StudyLog;
-        });
+        }).filter(log => log.isVerified === true);
 
         setCandidatesLogs(prev => ({
           ...prev,
