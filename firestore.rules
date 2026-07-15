@@ -59,7 +59,9 @@ service cloud.firestore {
               data.burnGoalHours is number && 
               data.examDate is string && data.examDate.size() <= 20 &&
               data.restrictionsEnabled is bool && 
-              data.restrictedSites is string && data.restrictedSites.size() <= 2000);
+              data.restrictedSites is string && data.restrictedSites.size() <= 2000 &&
+              (!('lastSentAuditWeek' in data) || (data.lastSentAuditWeek is string && data.lastSentAuditWeek.size() <= 50))) ||
+             (settingId == 'milestone' && data.keys().hasAll(['date', 'label']) && data.date is string && data.date.size() <= 20 && data.label is string && data.label.size() <= 100);
     }
 
     function isValidReadingLog(data) {
@@ -75,6 +77,13 @@ service cloud.firestore {
              data.domain is string &&
              data.date is timestamp &&
              data.createdAt is timestamp;
+    }
+
+    function isValidVocabulary(data) {
+      return data.keys().hasAll(['userId', 'word', 'date']) &&
+             data.userId is string &&
+             data.word is string && data.word.size() > 0 && data.word.size() <= 200 &&
+             data.date is timestamp;
     }
 
     function isValidDailyTask(data) {
@@ -132,8 +141,9 @@ service cloud.firestore {
       // User logs
       match /logs/{logId} {
         allow read: if isOwner(userId) || (isAuthenticated() && resource.data.isVerified == true);
-        allow delete: if isOwner(userId);
-        allow create, update: if isOwner(userId) && isValidLog(request.resource.data);
+        allow delete: if isOwner(userId) || (isAuthenticated() && resource.data.isVerified == true);
+        allow create: if isOwner(userId) && isValidLog(request.resource.data);
+        allow update: if (isOwner(userId) && isValidLog(request.resource.data)) || (isAuthenticated() && resource.data.isVerified == true);
       }
 
       // User settings
@@ -147,6 +157,12 @@ service cloud.firestore {
       match /readingLogs/{logId} {
         allow read, delete: if isOwner(userId);
         allow create, update: if isOwner(userId) && isValidReadingLog(request.resource.data);
+      }
+
+      // Vocabulary
+      match /vocabulary/{vocabId} {
+        allow read, delete: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidVocabulary(request.resource.data);
       }
 
       // Daily tasks

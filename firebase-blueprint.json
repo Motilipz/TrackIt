@@ -82,9 +82,20 @@
         "burnGoalHours": { "type": "number" },
         "examDate": { "type": "string" },
         "restrictionsEnabled": { "type": "boolean" },
-        "restrictedSites": { "type": "string" }
+        "restrictedSites": { "type": "string" },
+        "lastSentAuditWeek": { "type": "string" }
       },
       "required": ["stakesEnabled", "stakesAmount", "antiCharity", "boardEmails", "burnGoalHours", "examDate", "restrictionsEnabled", "restrictedSites"]
+    },
+    "MilestoneSettings": {
+      "title": "MilestoneSettings",
+      "description": "Milestone countdown target date and label.",
+      "type": "object",
+      "properties": {
+        "date": { "type": "string", "description": "The target date of the milestone." },
+        "label": { "type": "string", "description": "The label of the milestone." }
+      },
+      "required": ["date", "label"]
     },
     "ProofVaultItem": {
       "title": "ProofVaultItem",
@@ -135,6 +146,10 @@
     "/users/{userId}/settings/accountability": {
       "schema": "AccountabilitySettings",
       "description": "User's high stakes risk parameters."
+    },
+    "/users/{userId}/settings/milestone": {
+      "schema": "MilestoneSettings",
+      "description": "User's target milestone countdown settings."
     },
     "/users/{userId}/dailyTasks/{taskId}": {
       "schema": "DailyTask",

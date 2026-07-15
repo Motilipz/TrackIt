@@ -87,6 +87,26 @@ export const AccountabilityCockpit: React.FC<AccountabilityCockpitProps> = ({
     return localStorage.getItem(`audit_sent_${currentWeekSunday}`) === 'true';
   });
 
+  const updateAuditSentStatus = async (sent: boolean) => {
+    setAuditSentThisWeek(sent);
+    if (sent) {
+      localStorage.setItem(`audit_sent_${currentWeekSunday}`, "true");
+    } else {
+      localStorage.removeItem(`audit_sent_${currentWeekSunday}`);
+    }
+
+    if (user) {
+      try {
+        const setPath = doc(db, 'users', user.uid, 'settings', 'accountability');
+        await setDoc(setPath, {
+          lastSentAuditWeek: sent ? currentWeekSunday : ""
+        }, { merge: true });
+      } catch (err) {
+        console.error("Error updating audit sent status on Firestore:", err);
+      }
+    }
+  };
+
   // Form states for adding stand-alone Vault proof
   const [proofTaskTitle, setProofTaskTitle] = useState('');
   const [proofCategory, setProofCategory] = useState('QA');
@@ -149,6 +169,11 @@ export const AccountabilityCockpit: React.FC<AccountabilityCockpitProps> = ({
           boardEmails: data.boardEmails || user?.email || 'mentor@example.com',
           ...data 
         });
+        if (data.lastSentAuditWeek === currentWeekSunday) {
+          setAuditSentThisWeek(true);
+        } else {
+          setAuditSentThisWeek(false);
+        }
       } else {
         const initialSettings = {
           ...DEFAULT_ACCOUNTABILITY,
@@ -341,8 +366,7 @@ ${failedList.length > 0
           success: true,
           message: data.message || "Email delivered successfully by direct app server!"
         });
-        localStorage.setItem(`audit_sent_${currentWeekSunday}`, "true");
-        setAuditSentThisWeek(true);
+        updateAuditSentStatus(true);
       } else {
         setEmailResult({
           success: false,
@@ -497,8 +521,7 @@ ${failedList.length > 0
                   onClick={() => {
                     const report = generateAuditReport();
                     window.location.href = `mailto:${settings.boardEmails}?subject=Weekly%20Accountability%20Auditing%20Log&body=${encodeURIComponent(report)}`;
-                    localStorage.setItem(`audit_sent_${currentWeekSunday}`, 'true');
-                    setAuditSentThisWeek(true);
+                    updateAuditSentStatus(true);
                   }}
                   className="px-4 py-2.5 bg-surface hover:bg-surface-elevated text-text-secondary border border-border-tactical font-semibold text-xs rounded-xl transition-all shadow-sm flex items-center justify-center gap-1.5 shrink-0"
                 >
@@ -513,8 +536,7 @@ ${failedList.length > 0
                 <button
                   type="button"
                   onClick={() => {
-                    localStorage.setItem(`audit_sent_${currentWeekSunday}`, 'true');
-                    setAuditSentThisWeek(true);
+                    updateAuditSentStatus(true);
                   }}
                   className="px-3.5 py-2.5 text-text-muted hover:text-text-secondary font-semibold text-xs rounded-xl transition-all hover:bg-surface-elevated text-center shrink-0"
                 >
@@ -527,8 +549,7 @@ ${failedList.length > 0
               <button
                 type="button"
                 onClick={() => {
-                  localStorage.removeItem(`audit_sent_${currentWeekSunday}`);
-                  setAuditSentThisWeek(false);
+                  updateAuditSentStatus(false);
                 }}
                 className="text-[10px] text-text-muted hover:text-accent-red font-bold uppercase transition-all shrink-0 mt-2 md:mt-0"
               >
@@ -1156,8 +1177,7 @@ ${failedList.length > 0
                       onClick={() => {
                         const report = generateAuditReport();
                         window.location.href = `mailto:${settings.boardEmails}?subject=Weekly%20Accountability%20Auditing%20Log&body=${encodeURIComponent(report)}`;
-                        localStorage.setItem(`audit_sent_${currentWeekSunday}`, 'true');
-                        setAuditSentThisWeek(true);
+                        updateAuditSentStatus(true);
                       }}
                       className="py-3 px-4 bg-surface-elevated hover:bg-background border border-border-tactical transition-all text-text-secondary hover:text-text-primary font-bold text-xs uppercase tracking-wider rounded-xl flex items-center justify-center gap-1.5 shrink-0"
                     >

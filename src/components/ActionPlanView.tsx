@@ -7,6 +7,7 @@ import {
 import { format } from 'date-fns';
 import { DailyTask } from '../types';
 import { RoutineDeployer, BlueprintTask } from './RoutineDeployer';
+import { db, doc, setDoc, onSnapshot, User } from '../firebase';
 
 // Simple class utility helper
 const cn = (...classes: (string | undefined | null | boolean)[]) => {
@@ -14,6 +15,7 @@ const cn = (...classes: (string | undefined | null | boolean)[]) => {
 };
 
 interface ActionPlanViewProps {
+  user: User | null;
   categories: string[];
   dailyTasks: DailyTask[];
   onAddTask: (title: string, category: string, isFrog: boolean, estimatedDuration: number) => Promise<void>;
@@ -47,6 +49,7 @@ const SUGGESTIONS: Record<string, string> = {
 };
 
 export const ActionPlanView: React.FC<ActionPlanViewProps> = ({
+  user,
   categories,
   dailyTasks,
   onAddTask,
@@ -94,6 +97,37 @@ export const ActionPlanView: React.FC<ActionPlanViewProps> = ({
   const [editMilestoneDate, setEditMilestoneDate] = useState(milestoneDate);
   const [editMilestoneLabel, setEditMilestoneLabel] = useState(milestoneLabel);
 
+  // Firestore milestone synchronization
+  useEffect(() => {
+    if (!user) return;
+    const unsubscribe = onSnapshot(doc(db, 'users', user.uid, 'settings', 'milestone'), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data.date) {
+          setMilestoneDate(data.date);
+          setEditMilestoneDate(data.date);
+        }
+        if (data.label) {
+          setMilestoneLabel(data.label);
+          setEditMilestoneLabel(data.label);
+        }
+      } else {
+        // Create initial default on Firestore if it doesn't exist
+        const futureDate = new Date();
+        futureDate.setDate(futureDate.getDate() + 14);
+        const formatted = format(futureDate, 'yyyy-MM-dd');
+        setDoc(doc(db, 'users', user.uid, 'settings', 'milestone'), {
+          date: formatted,
+          label: 'SimCAT'
+        }).catch(err => console.error("Error setting milestone settings:", err));
+      }
+    }, (error) => {
+      console.error("Error getting milestone settings:", error);
+    });
+
+    return () => unsubscribe();
+  }, [user]);
+
   // Drag and drop state
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
 
@@ -135,12 +169,23 @@ export const ActionPlanView: React.FC<ActionPlanViewProps> = ({
     }
   };
 
-  const handleSaveMilestone = () => {
+  const handleSaveMilestone = async () => {
     localStorage.setItem('simcat_milestone_date', editMilestoneDate);
     localStorage.setItem('simcat_milestone_label', editMilestoneLabel);
     setMilestoneDate(editMilestoneDate);
     setMilestoneLabel(editMilestoneLabel);
     setIsEditingMilestone(false);
+
+    if (user) {
+      try {
+        await setDoc(doc(db, 'users', user.uid, 'settings', 'milestone'), {
+          date: editMilestoneDate,
+          label: editMilestoneLabel
+        });
+      } catch (err) {
+        console.error("Error saving milestone to Firestore:", err);
+      }
+    }
   };
 
   const todayStr = format(new Date(), 'yyyy-MM-dd');

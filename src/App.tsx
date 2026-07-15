@@ -301,21 +301,122 @@ export default function App() {
 
 function AppContent() {
   const { theme, setTheme, resolvedTheme } = useTheme();
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  
+  // Synchronously restore user from localStorage if cached to prevent page-load logout flickers
+  const [user, setUser] = useState<User | null>(() => {
+    const saved = localStorage.getItem('cached_user');
+    return saved ? JSON.parse(saved) : null;
+  });
+  
+  // Skip loading screen if user is already cached locally
+  const [loading, setLoading] = useState(() => {
+    return !localStorage.getItem('cached_user');
+  });
+  
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
-  const [logs, setLogs] = useState<StudyLog[]>([]);
-  const [readingLogs, setReadingLogs] = useState<ReadingLog[]>([]);
-  const [categories, setCategories] = useState<string[]>(DEFAULT_CATEGORIES);
-  const [goals, setGoals] = useState<UserGoals>({ daily: 120, weekly: 840 });
+  
+  // Synchronously restore study logs from localStorage backup cache matching the cached user
+  const [logs, setLogs] = useState<StudyLog[]>(() => {
+    const cachedUser = localStorage.getItem('cached_user');
+    if (cachedUser) {
+      try {
+        const uid = JSON.parse(cachedUser).uid;
+        const saved = localStorage.getItem(`backup_logs_${uid}`);
+        if (saved) {
+          return JSON.parse(saved).map((l: any) => ({
+            ...l,
+            date: new Date(l.date),
+            createdAt: new Date(l.createdAt)
+          }));
+        }
+      } catch (err) {
+        console.error("Failed to restore cached logs:", err);
+      }
+    }
+    return [];
+  });
+  
+  // Synchronously restore reading logs from localStorage backup cache
+  const [readingLogs, setReadingLogs] = useState<ReadingLog[]>(() => {
+    const cachedUser = localStorage.getItem('cached_user');
+    if (cachedUser) {
+      try {
+        const uid = JSON.parse(cachedUser).uid;
+        const saved = localStorage.getItem(`backup_readingLogs_${uid}`);
+        if (saved) {
+          return JSON.parse(saved).map((l: any) => ({
+            ...l,
+            date: new Date(l.date),
+            createdAt: new Date(l.createdAt)
+          }));
+        }
+      } catch (err) {
+        console.error("Failed to restore cached reading logs:", err);
+      }
+    }
+    return [];
+  });
+  
+  // Synchronously restore categories list from localStorage backup cache
+  const [categories, setCategories] = useState<string[]>(() => {
+    const cachedUser = localStorage.getItem('cached_user');
+    if (cachedUser) {
+      try {
+        const uid = JSON.parse(cachedUser).uid;
+        const saved = localStorage.getItem(`backup_categories_${uid}`);
+        if (saved) {
+          return JSON.parse(saved);
+        }
+      } catch (err) {
+        console.error("Failed to restore cached categories:", err);
+      }
+    }
+    return DEFAULT_CATEGORIES;
+  });
+  
+  // Synchronously restore goals from localStorage backup cache
+  const [goals, setGoals] = useState<UserGoals>(() => {
+    const cachedUser = localStorage.getItem('cached_user');
+    if (cachedUser) {
+      try {
+        const uid = JSON.parse(cachedUser).uid;
+        const saved = localStorage.getItem(`backup_goals_${uid}`);
+        if (saved) {
+          return JSON.parse(saved);
+        }
+      } catch (err) {
+        console.error("Failed to restore cached goals:", err);
+      }
+    }
+    return { daily: 120, weekly: 840 };
+  });
+
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deleteConfirmType, setDeleteConfirmType] = useState<'Study' | 'Reading' | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'log' | 'history' | 'timer' | 'reading' | 'settings' | 'action-plan' | 'accountability' | 'arena'>('dashboard');
   
-  // Daily Tasks and State Handoff
-  const [dailyTasks, setDailyTasks] = useState<DailyTask[]>([]);
+  // Daily Tasks and State Handoff - restored synchronously from localStorage
+  const [dailyTasks, setDailyTasks] = useState<DailyTask[]>(() => {
+    const cachedUser = localStorage.getItem('cached_user');
+    if (cachedUser) {
+      try {
+        const uid = JSON.parse(cachedUser).uid;
+        const saved = localStorage.getItem(`backup_dailyTasks_${uid}`);
+        if (saved) {
+          return JSON.parse(saved).map((t: any) => ({
+            ...t,
+            createdAt: new Date(t.createdAt)
+          }));
+        }
+      } catch (err) {
+        console.error("Failed to restore cached daily tasks:", err);
+      }
+    }
+    return [];
+  });
+  
   const [linkedTaskId, setLinkedTaskId] = useState<string | null>(null);
   const [timerPrefilledCategory, setTimerPrefilledCategory] = useState<string | undefined>(undefined);
   const [timerPrefilledNotes, setTimerPrefilledNotes] = useState<string | undefined>(undefined);
@@ -388,7 +489,18 @@ function AppContent() {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
-      setUser(u);
+      if (u) {
+        setUser(u);
+        localStorage.setItem('cached_user', JSON.stringify({
+          uid: u.uid,
+          displayName: u.displayName,
+          email: u.email,
+          photoURL: u.photoURL
+        }));
+      } else {
+        setUser(null);
+        localStorage.removeItem('cached_user');
+      }
       setLoading(false);
     });
     return () => unsubscribe();
@@ -416,6 +528,7 @@ function AppContent() {
         } as StudyLog;
       });
       setLogs(newLogs);
+      localStorage.setItem(`backup_logs_${user.uid}`, JSON.stringify(newLogs));
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, `users/${user.uid}/logs`);
     });
@@ -445,6 +558,7 @@ function AppContent() {
         } as unknown as ReadingLog;
       });
       setReadingLogs(newLogs);
+      localStorage.setItem(`backup_readingLogs_${user.uid}`, JSON.stringify(newLogs));
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, `users/${user.uid}/readingLogs`);
     });
@@ -474,6 +588,7 @@ function AppContent() {
         } as unknown as DailyTask;
       });
       setDailyTasks(newTasks);
+      localStorage.setItem(`backup_dailyTasks_${user.uid}`, JSON.stringify(newTasks));
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, `users/${user.uid}/dailyTasks`);
     });
@@ -490,9 +605,14 @@ function AppContent() {
     const path = `users/${user.uid}/settings/categories`;
     const unsubscribe = onSnapshot(doc(db, 'users', user.uid, 'settings', 'categories'), (docSnap) => {
       if (docSnap.exists()) {
-        setCategories(docSnap.data().list || DEFAULT_CATEGORIES);
+        const newList = docSnap.data().list || DEFAULT_CATEGORIES;
+        setCategories(newList);
+        localStorage.setItem(`backup_categories_${user.uid}`, JSON.stringify(newList));
       } else {
         setDoc(doc(db, 'users', user.uid, 'settings', 'categories'), { list: DEFAULT_CATEGORIES })
+          .then(() => {
+            localStorage.setItem(`backup_categories_${user.uid}`, JSON.stringify(DEFAULT_CATEGORIES));
+          })
           .catch(err => handleFirestoreError(err, OperationType.WRITE, path));
       }
     }, (error) => {
@@ -508,9 +628,15 @@ function AppContent() {
     const path = `users/${user.uid}/settings/goals`;
     const unsubscribe = onSnapshot(doc(db, 'users', user.uid, 'settings', 'goals'), (docSnap) => {
       if (docSnap.exists()) {
-        setGoals(docSnap.data() as UserGoals);
+        const newGoals = docSnap.data() as UserGoals;
+        setGoals(newGoals);
+        localStorage.setItem(`backup_goals_${user.uid}`, JSON.stringify(newGoals));
       } else {
-        setDoc(doc(db, 'users', user.uid, 'settings', 'goals'), { daily: 120, weekly: 840 })
+        const defaultGoals = { daily: 120, weekly: 840 };
+        setDoc(doc(db, 'users', user.uid, 'settings', 'goals'), defaultGoals)
+          .then(() => {
+            localStorage.setItem(`backup_goals_${user.uid}`, JSON.stringify(defaultGoals));
+          })
           .catch(err => handleFirestoreError(err, OperationType.WRITE, path));
       }
     }, (error) => {
@@ -2499,6 +2625,7 @@ function AppContent() {
                 linkedTaskId={linkedTaskId}
                 onCompleteLinkedTask={handleCompleteLinkedTask}
                 onClearLinkedTaskId={() => setLinkedTaskId(null)}
+                onSaveComplete={() => setActiveTab('dashboard')}
               />
             </div>
           )}
@@ -2533,6 +2660,7 @@ function AppContent() {
               </div>
 
               <ActionPlanView 
+                user={user}
                 categories={categories}
                 dailyTasks={dailyTasks}
                 onAddTask={async (title, categoryVal, isFrogVal, estimatedDurationVal) => {

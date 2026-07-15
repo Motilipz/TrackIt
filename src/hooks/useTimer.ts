@@ -214,20 +214,7 @@ export const useTimer = (initialSettings: TimerSettings) => {
     // In a real app, we'd save these to Firebase/DB here
     console.log('Session Completed with:', { rating, notes, category, takeaways, sillyMistakes, strategicTag });
     
-    if (settings.autoFlow && !settings.marathonMode) {
-      if (mode === 'focus') {
-        const isLongBreak = newCount % 4 === 0 && newCount !== 0;
-        setMode(isLongBreak ? 'long-break' : 'break');
-        setTimeLeft((isLongBreak ? settings.longBreakTime : settings.breakTime) * 60);
-        setStatus('running');
-      } else {
-        setMode('focus');
-        setTimeLeft(settings.focusTime * 60);
-        setStatus('running');
-      }
-    } else {
-      resetTimer();
-    }
+    resetTimer();
   };
 
   return {

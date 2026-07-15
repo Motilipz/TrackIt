@@ -63,7 +63,8 @@ export const TimerCard = ({
   onPrefillClear,
   linkedTaskId,
   onCompleteLinkedTask,
-  onClearLinkedTaskId
+  onClearLinkedTaskId,
+  onSaveComplete
 }: { 
   logs?: StudyLog[];
   prefilledCategory?: string;
@@ -72,6 +73,7 @@ export const TimerCard = ({
   linkedTaskId?: string | null;
   onCompleteLinkedTask?: (taskId: string, proofOfWork: string) => Promise<void>;
   onClearLinkedTaskId?: () => void;
+  onSaveComplete?: () => void;
 }) => {
   const [initialSettings] = useState<TimerSettings>({
     autoFlow: false,
@@ -394,15 +396,17 @@ export const TimerCard = ({
     const user = auth.currentUser;
     if (!user) {
       console.error('User not authenticated. Session not saved.');
+      setShowRatingModal(false);
       return;
     }
 
     const isUnverifiedSession = timer.deadmanFailed || timer.deadmanPromptActive;
+    const elapsed = timer.elapsedTime;
 
     const session: Session = {
       id: crypto.randomUUID(),
       timestamp: Date.now(),
-      duration: timer.elapsedTime,
+      duration: elapsed,
       category,
       notes,
       rating,
@@ -411,32 +415,27 @@ export const TimerCard = ({
       sillyMistakes,
       strategicTag
     };
-    
-    try {
-      // Save to Firestore
-      await addDoc(collection(db, 'users', user.uid, 'logs'), {
-        userId: user.uid,
-        category,
-        duration: Math.floor(timer.elapsedTime / 60) || 1, // Store in minutes, min 1m
-        date: Timestamp.now(),
-        notes: `${notes}${takeaways ? '\nTakeaways: ' + takeaways : ''}${sillyMistakes ? '\nSilly Mistakes: ' + sillyMistakes : ''}${strategicTag ? '\nStrategy: ' + strategicTag : ''}${isUnverifiedSession ? ' (UNVERIFIED AUTO-HALTED)' : ''}`.slice(0, 1000),
-        rating,
-        isUnverifiedSession,
-        createdAt: Timestamp.now(),
-        updatedAt: Timestamp.now(),
-        timerSessionId: session.id
-      });
-      console.log('Session Saved to Firestore:', session);
 
-      // Handle linked task dual dispatch completion
-      if (linkedTaskId && onCompleteLinkedTask) {
-        await onCompleteLinkedTask(linkedTaskId, proofOfWork);
-      }
-    } catch (error) {
-      console.error('Error saving session to Firestore:', error);
+    // Capture fields to local variables so we can reset inputs and close the popup instantly,
+    // preventing any visual freeze or lag while database write is happening.
+    const r = rating;
+    const n = notes;
+    const c = category;
+    const t = takeaways;
+    const s = sillyMistakes;
+    const tag = strategicTag;
+    const proof = proofOfWork;
+
+    // Stop ambient music and close Picture-in-Picture immediately
+    setAmbientSound('none');
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
     }
-    
-    timer.completeSession(rating, notes, category, takeaways, sillyMistakes, strategicTag);
+    if (document.pictureInPictureElement) {
+      document.exitPictureInPicture().catch(e => console.log('Error exiting PiP:', e));
+    }
+
     setShowRatingModal(false);
     setRating(0);
     setNotes('');
@@ -446,6 +445,37 @@ export const TimerCard = ({
     setStrategicTag(STRATEGIC_TAGS[0]);
     if (onPrefillClear) {
       onPrefillClear();
+    }
+    
+    // Call completeSession immediately to reset the timer instantly and prevent ticking during DB writes
+    timer.completeSession(r, n, c, t, s, tag);
+
+    try {
+      // Save to Firestore in background/awaited call
+      await addDoc(collection(db, 'users', user.uid, 'logs'), {
+        userId: user.uid,
+        category: c,
+        duration: Math.floor(elapsed / 60) || 1, // Store in minutes, min 1m
+        date: Timestamp.now(),
+        notes: `${n}${t ? '\nTakeaways: ' + t : ''}${s ? '\nSilly Mistakes: ' + s : ''}${tag ? '\nStrategy: ' + tag : ''}${isUnverifiedSession ? ' (UNVERIFIED AUTO-HALTED)' : ''}`.slice(0, 1000),
+        rating: r,
+        isUnverifiedSession,
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now(),
+        timerSessionId: session.id
+      });
+      console.log('Session Saved to Firestore:', session);
+
+      // Handle linked task dual dispatch completion
+      if (linkedTaskId && onCompleteLinkedTask) {
+        await onCompleteLinkedTask(linkedTaskId, proof);
+      }
+    } catch (error) {
+      console.error('Error saving session to Firestore:', error);
+    }
+    
+    if (onSaveComplete) {
+      onSaveComplete();
     }
   };
 

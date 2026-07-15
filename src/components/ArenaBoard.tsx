@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Trophy, Zap, Award, Sparkles, TrendingUp, Gauge, Clock, Flame, CheckCircle2, MessageSquare, Search, Crown, ArrowUp, ShieldAlert, ZapOff } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { db, collection, query, onSnapshot, doc, setDoc, Timestamp, where, orderBy } from '../firebase';
+import { db, collection, query, onSnapshot, doc, setDoc, deleteDoc, Timestamp, where, orderBy } from '../firebase';
 import { ArenaRanking, StudyLog } from '../types';
 import { formatDistanceToNow } from 'date-fns';
 import { getDirectDriveImageUrl } from '../utils';
@@ -306,8 +306,95 @@ export const ArenaBoard = ({ user, totalHours, streak, tasksCompleted, wpm }: Ar
   };
 
   // Gamified peer audit: vouch pass or flag as fraudulent
-  const submitAudit = async (candidate: ArenaRanking, type: 'pass' | 'flag_fraud') => {
+  const submitAudit = async (candidate: ArenaRanking, type: 'pass' | 'flag_fraud', log?: any) => {
     try {
+      if (log) {
+        if (type === 'flag_fraud') {
+          const confirmFlag = window.confirm(`Are you sure you want to flag this study session as false? If flagged, it will be instantly deleted from ${candidate.displayName}'s history.`);
+          if (!confirmFlag) return;
+
+          // Delete the log from competitor's history
+          const logDocRef = doc(db, 'users', candidate.userId, 'logs', log.id);
+          await deleteDoc(logDocRef);
+
+          // Deduct points from the candidate
+          const docRef = doc(db, 'arena_rankings', candidate.userId);
+          const flaggedBy = candidate.flaggedBy || [];
+          let nextFlagged = [...flaggedBy];
+          if (!nextFlagged.includes(user.uid)) {
+            nextFlagged.push(user.uid);
+          }
+          
+          let nextStatus = 'banned';
+          let nextPoints = Math.max(0, (candidate.points || getScore(candidate)) - 150);
+
+          await setDoc(docRef, {
+            flaggedBy: nextFlagged,
+            auditStatus: nextStatus,
+            points: nextPoints
+          }, { merge: true });
+
+          // Award Sheriff Badge to active auditor
+          const auditorRef = doc(db, 'arena_rankings', user.uid);
+          await setDoc(auditorRef, {
+            sheriffBadge: true
+          }, { merge: true });
+
+          // Dispatch live feed alert
+          setLiveEvents(prev => [
+            {
+              id: `audit_${Date.now()}`,
+              timestamp: new Date(),
+              message: `🚨 Auditor ${user.displayName || 'Sheriff'} flagged and deleted a false session from ${candidate.displayName}'s history!`,
+              type: 'info'
+            },
+            ...prev
+          ]);
+          alert("The session was flagged and successfully deleted from history.");
+        } else {
+          // Vouch / Pass
+          const logDocRef = doc(db, 'users', candidate.userId, 'logs', log.id);
+          const passedBy = log.passedBy || [];
+          if (passedBy.includes(user.uid)) {
+            alert("You have already vouched for this study session.");
+            return;
+          }
+          const nextPassed = [...passedBy, user.uid];
+          await setDoc(logDocRef, {
+            passedBy: nextPassed
+          }, { merge: true });
+
+          // Increment candidate's points if they get 2 vouches on this log
+          if (nextPassed.length >= 2) {
+            const docRef = doc(db, 'arena_rankings', candidate.userId);
+            const currentPoints = candidate.points || getScore(candidate);
+            await setDoc(docRef, {
+              points: currentPoints + 50,
+              auditStatus: 'passed'
+            }, { merge: true });
+          }
+
+          // Award Sheriff Badge to active auditor
+          const auditorRef = doc(db, 'arena_rankings', user.uid);
+          await setDoc(auditorRef, {
+            sheriffBadge: true
+          }, { merge: true });
+
+          // Dispatch live feed alert
+          setLiveEvents(prev => [
+            {
+              id: `audit_${Date.now()}`,
+              timestamp: new Date(),
+              message: `🛡️ Auditor ${user.displayName || 'Sheriff'} vouched for ${candidate.displayName}'s study block!`,
+              type: 'info'
+            },
+            ...prev
+          ]);
+        }
+        return;
+      }
+
+      // Legacy direct candidate audit logic (when log is undefined)
       const docRef = doc(db, 'arena_rankings', candidate.userId);
       const flaggedBy = candidate.flaggedBy || [];
       const passedBy = candidate.passedBy || [];
@@ -1077,7 +1164,7 @@ export const ArenaBoard = ({ user, totalHours, streak, tasksCompleted, wpm }: Ar
               .flatMap(cand => {
                 const logs = candidatesLogs[cand.userId] || [];
                 return logs.map((log: any) => {
-                  const hasAudited = (cand.flaggedBy || []).includes(user.uid) || (cand.passedBy || []).includes(user.uid);
+                  const hasAudited = (log.passedBy || []).includes(user.uid);
                   const directImageUrl = getDirectDriveImageUrl(log.driveFileUrl);
                   
                   return (
@@ -1168,13 +1255,13 @@ export const ArenaBoard = ({ user, totalHours, streak, tasksCompleted, wpm }: Ar
                         ) : (
                           <div className="flex gap-2">
                             <button
-                              onClick={() => submitAudit(cand, 'pass')}
+                              onClick={() => submitAudit(cand, 'pass', log)}
                               className="flex-1 py-1.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/25 border border-emerald-500/15 hover:border-emerald-500/35 text-emerald-600 dark:text-emerald-450 rounded-xl text-[10px] font-extrabold select-none transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-1"
                             >
                               👍 Vouch (Trust)
                             </button>
                             <button
-                              onClick={() => submitAudit(cand, 'flag_fraud')}
+                              onClick={() => submitAudit(cand, 'flag_fraud', log)}
                               className="flex-1 py-1.5 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/25 border border-rose-500/15 hover:border-rose-500/35 text-rose-600 dark:text-rose-450 rounded-xl text-[10px] font-extrabold select-none transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-1"
                             >
                               👎 Flag (Fraud)
@@ -1183,8 +1270,7 @@ export const ArenaBoard = ({ user, totalHours, streak, tasksCompleted, wpm }: Ar
                         )}
 
                         <div className="flex items-center justify-between text-[10px] text-slate-400 dark:text-zinc-500 px-1 font-semibold mt-1">
-                          <span>Vouches: <strong className="text-emerald-500 font-extrabold">{(cand.passedBy || []).length}</strong>/2</span>
-                          <span>Flags: <strong className="text-rose-500 font-extrabold">{(cand.flaggedBy || []).length}</strong>/2</span>
+                          <span>Vouches: <strong className="text-emerald-500 font-extrabold">{(log.passedBy || []).length}</strong>/2</span>
                         </div>
                       </div>
                     </motion.div>
