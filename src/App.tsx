@@ -460,6 +460,24 @@ function AppContent() {
   const [googleAccessToken, setGoogleAccessToken] = useState<string | null>(null);
   const [takeawayInsight, setTakeawayInsight] = useState('');
 
+  const resetLogForm = () => {
+    setEditingLogId(null);
+    setCategory(categories[0] || 'QA');
+    setStartTime(format(new Date(), 'HH:mm'));
+    setEndTime(format(addHours(new Date(), 1), 'HH:mm'));
+    setDate(format(new Date(), 'yyyy-MM-dd'));
+    setNotes('');
+    setRating(3);
+    setIsVerified(false);
+    setProofImage(null);
+    setDriveFileUrl('');
+    setTakeawayInsight('');
+    const fileInput = document.getElementById('scratchpad-uploader') as HTMLInputElement | null;
+    if (fileInput) {
+      fileInput.value = '';
+    }
+  };
+
   // Restore Google Drive access token from localStorage on component mount
   useEffect(() => {
     const token = localStorage.getItem('google_access_token');
@@ -949,88 +967,93 @@ function AppContent() {
     }
 
     setIsSubmitting(true);
-    let finalDriveUrl = driveFileUrl;
-    let fallbackUsed = false;
+    
+    // Capture states locally so we don't depend on live reactive state in background async execution
+    const capUserUid = user.uid;
+    const capCategory = category;
+    const capDurationMinutes = durationMinutes;
+    const capDateStr = date;
+    const capNotes = notes;
+    const capRating = rating;
+    const capStartTime = startTime;
+    const capEndTime = endTime;
+    const capIsVerified = isVerified;
+    const capTakeawayInsight = takeawayInsight;
+    const capProofImage = proofImage;
+    const capDriveFileUrl = driveFileUrl;
+    const capEditingLogId = editingLogId;
+    const capGoogleAccessToken = googleAccessToken;
+    const capCreatedAt = editingLogId ? (logs.find(l => l.id === editingLogId)?.createdAt || new Date()) : new Date();
 
-    if (isVerified && proofImage) {
+    // 1. SIMULTANEOUS DASHBOARD REDIRECTION & CORE STATE CLEANUP
+    // Redirect immediately and reset the manual log card to default state
+    setActiveTab('dashboard');
+    resetLogForm();
+
+    // 2. BACKGROUND STUDY LOG PERSISTENCE PIPELINE (NON-BLOCKING)
+    (async () => {
+      let finalDriveUrl = capDriveFileUrl;
+      let fallbackUsed = false;
+
       try {
-        finalDriveUrl = await uploadToGoogleDrive(proofImage, googleAccessToken!);
-        setDriveFileUrl(finalDriveUrl);
-      } catch (uploadError) {
-        console.warn("Google Drive upload failed. Engaging local Base64 sandbox fallback...", uploadError);
-        try {
-          const base64Data = await compressImageToBase64(proofImage);
-          finalDriveUrl = base64Data;
-          setDriveFileUrl(base64Data);
-          fallbackUsed = true;
-        } catch (compressError) {
-          setFormError("Both Google Drive upload and local fallback storage compression failed.");
-          setTimeout(() => setFormError(null), 4000);
-          setIsSubmitting(false);
-          return;
+        if (capIsVerified && capProofImage) {
+          try {
+            finalDriveUrl = await uploadToGoogleDrive(capProofImage, capGoogleAccessToken!);
+          } catch (uploadError) {
+            console.warn("Google Drive upload failed. Engaging local Base64 sandbox fallback...", uploadError);
+            try {
+              finalDriveUrl = await compressImageToBase64(capProofImage);
+              fallbackUsed = true;
+            } catch (compressError) {
+              console.error("Local fallback storage compression failed:", compressError);
+              setFormError("Both Google Drive upload and local fallback storage compression failed.");
+              setTimeout(() => setFormError(null), 4000);
+              return;
+            }
+          }
         }
-      }
-    }
 
-    const path = editingLogId 
-      ? `users/${user.uid}/logs/${editingLogId}`
-      : `users/${user.uid}/logs`;
-      
-    try {
-      const logData = {
-        userId: user.uid,
-        category,
-        duration: durationMinutes,
-        date: Timestamp.fromDate(new Date(date)),
-        notes,
-        rating,
-        startTime,
-        endTime,
-        isVerified,
-        isUnverifiedSession: !isVerified,
-        takeawayInsight: isVerified ? takeawayInsight : "",
-        proofImageName: isVerified && proofImage ? (fallbackUsed ? `${proofImage.name} (Sandbox Local)` : proofImage.name) : (isVerified && finalDriveUrl ? "Google Drive Proof" : ""),
-        driveFileUrl: isVerified ? finalDriveUrl : "",
-        updatedAt: Timestamp.now()
-      };
+        const logData = {
+          userId: capUserUid,
+          category: capCategory,
+          duration: capDurationMinutes,
+          date: Timestamp.fromDate(new Date(capDateStr)),
+          notes: capNotes,
+          rating: capRating,
+          startTime: capStartTime,
+          endTime: capEndTime,
+          isVerified: capIsVerified,
+          isUnverifiedSession: !capIsVerified,
+          takeawayInsight: capIsVerified ? capTakeawayInsight : "",
+          proofImageName: capIsVerified && capProofImage ? (fallbackUsed ? `${capProofImage.name} (Sandbox Local)` : capProofImage.name) : (capIsVerified && finalDriveUrl ? "Google Drive Proof" : ""),
+          driveFileUrl: capIsVerified ? finalDriveUrl : "",
+          updatedAt: Timestamp.now()
+        };
 
-      if (editingLogId) {
-        await setDoc(doc(db, 'users', user.uid, 'logs', editingLogId), {
-          ...logData,
-          createdAt: logs.find(l => l.id === editingLogId)?.createdAt || Timestamp.now()
-        });
-      } else {
-        await addDoc(collection(db, 'users', user.uid, 'logs'), {
-          ...logData,
-          createdAt: Timestamp.now()
-        });
+        if (capEditingLogId) {
+          await setDoc(doc(db, 'users', capUserUid, 'logs', capEditingLogId), {
+            ...logData,
+            createdAt: Timestamp.fromDate(capCreatedAt)
+          });
+        } else {
+          await addDoc(collection(db, 'users', capUserUid, 'logs'), {
+            ...logData,
+            createdAt: Timestamp.now()
+          });
+        }
+
+        if (fallbackUsed) {
+          setFormError("⚠️ Google Drive 403 Forbidden: Saved successfully to Local Sandbox instead!");
+          setTimeout(() => setFormError(null), 6000);
+        }
+      } catch (error) {
+        console.error("Error saving study log to Firestore in background:", error);
+        setFormError(`Save failed: ${error instanceof Error ? error.message : String(error)}`);
+        setTimeout(() => setFormError(null), 8000);
+      } finally {
+        setIsSubmitting(false);
       }
-      
-      if (fallbackUsed) {
-        setFormError("⚠️ Google Drive 403 Forbidden: Saved successfully to Local Sandbox instead!");
-        setTimeout(() => setFormError(null), 6000);
-      }
-      
-      setNotes('');
-      setIsVerified(false);
-      setProofImage(null);
-      setDriveFileUrl('');
-      setTakeawayInsight('');
-      setEditingLogId(null);
-      setActiveTab('dashboard');
-    } catch (error) {
-      console.error("Error saving study log to Firestore:", error);
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      setFormError(`Save failed: ${errorMsg}`);
-      setTimeout(() => setFormError(null), 8000);
-      try {
-        handleFirestoreError(error, editingLogId ? OperationType.UPDATE : OperationType.CREATE, path);
-      } catch (logErr) {
-        // Log the structural error diagnostic to console, but don't crash
-      }
-    } finally {
-      setIsSubmitting(false);
-    }
+    })();
   };
 
   const handleEdit = (log: StudyLog) => {
@@ -1773,7 +1796,10 @@ function AppContent() {
             {!isSidebarCompact && <span className="truncate">Dashboard</span>}
           </button>
           <button
-            onClick={() => setActiveTab('log')}
+            onClick={() => {
+              resetLogForm();
+              setActiveTab('log');
+            }}
             className={cn(
               "w-full flex items-center rounded-xl font-medium transition-all duration-200",
               isSidebarCompact ? "justify-center p-3" : "gap-3 px-4 py-3",
